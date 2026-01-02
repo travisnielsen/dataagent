@@ -24,3 +24,10 @@ dev = [
     "httpx>=0.27.0",
 ]
 
+[tool.pyright]
+pythonVersion = "3.12.3"
+include = ["src"]
+extraPaths = ["src"]
+
+[tool.pylint.MASTER]
+init-hook = 'import sys; sys.path.insert(0, "src")'

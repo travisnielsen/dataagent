@@ -14,24 +14,10 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from auth import azure_scheme, azure_ad_settings, AzureADAuthMiddleware
+from agents import build_nl2sql_client, create_nl2sql_agent  # pylint: disable=no-name-in-module
 
-# Import auth components
-try:
-    from src.auth import azure_scheme, azure_ad_settings, AzureADAuthMiddleware
-except ImportError:
-    from auth import azure_scheme, azure_ad_settings, AzureADAuthMiddleware
-
-# Import agent factory functions
-try:
-    from src.agents import build_nl2sql_client, create_nl2sql_agent
-except ImportError:
-    from agents import build_nl2sql_client, create_nl2sql_agent  # type: ignore[import-not-found]
-
-# Import routers
-try:
-    from src.routers import chat_router, threads_router
-except ImportError:
-    from routers import chat_router, threads_router  # type: ignore[import-not-found]
+from routers import chat_router, threads_router
 
 load_dotenv()
 
