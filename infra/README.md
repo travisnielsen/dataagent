@@ -90,6 +90,12 @@ az role assignment create \
   --assignee $APP_ID \
   --role "Storage Blob Data Contributor" \
   --scope "/subscriptions/<SUB_ID>/resourceGroups/<RG>/providers/Microsoft.Storage/storageAccounts/<STORAGE_ACCOUNT>"
+
+# Grant Storage Account Contributor role (required to modify network rules during deployment)
+az role assignment create \
+  --assignee $APP_ID \
+  --role "Storage Account Contributor" \
+  --scope "/subscriptions/<SUB_ID>/resourceGroups/<RG>/providers/Microsoft.Storage/storageAccounts/<STORAGE_ACCOUNT>"
 ```
 
 2. **Configure GitHub Repository Variables:**

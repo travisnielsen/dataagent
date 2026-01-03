@@ -66,6 +66,19 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Add runner IP to storage firewall
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            RUNNER_IP=$(curl -s https://api.ipify.org)
+            echo "Adding runner IP $RUNNER_IP to storage firewall"
+            az storage account network-rule add \
+              --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+              --ip-address $RUNNER_IP \
+              --only-show-errors || true
+            # Wait for firewall rule to propagate
+            sleep 30
+
       - name: Deploy to Azure Static Website
         uses: azure/cli@v2
         with:
@@ -76,3 +89,15 @@ jobs:
               --source frontend/out \
               --overwrite \
               --auth-mode login
+
+      - name: Remove runner IP from storage firewall
+        if: always()
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            RUNNER_IP=$(curl -s https://api.ipify.org)
+            echo "Removing runner IP $RUNNER_IP from storage firewall"
+            az storage account network-rule remove \
+              --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+              --ip-address $RUNNER_IP \
+              --only-show-errors || true
