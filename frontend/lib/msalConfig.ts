@@ -18,7 +18,7 @@ export const msalConfig: Configuration = {
     postLogoutRedirectUri: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000",
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    cacheLocation: "localStorage", // Use localStorage for persistence across tabs/sessions
     storeAuthStateInCookie: false,
   },
   system: {

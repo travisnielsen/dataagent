@@ -2,7 +2,7 @@
 
 import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication, EventType, EventMessage, AuthenticationResult } from "@azure/msal-browser";
-import { msalConfig } from "@/lib/msalConfig";
+import { msalConfig, loginRequest } from "@/lib/msalConfig";
 import { useEffect, useState } from "react";
 
 // Create the MSAL instance outside the component to avoid re-initialization
@@ -22,6 +22,12 @@ export function MsalAuthProvider({ children }: { children: React.ReactNode }) {
       const accounts = msalInstance.getAllAccounts();
       if (accounts.length > 0) {
         msalInstance.setActiveAccount(accounts[0]);
+        setIsInitialized(true);
+      } else {
+        // No accounts - trigger sign-in automatically
+        msalInstance.loginRedirect(loginRequest);
+        // Don't set initialized - we're redirecting away
+        return;
       }
 
       // Listen for sign-in events
@@ -31,8 +37,6 @@ export function MsalAuthProvider({ children }: { children: React.ReactNode }) {
           msalInstance.setActiveAccount(payload.account);
         }
       });
-
-      setIsInitialized(true);
     };
 
     initializeMsal();
