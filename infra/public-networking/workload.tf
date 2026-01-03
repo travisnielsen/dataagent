@@ -99,6 +99,14 @@ module "ai_storage" {
   shared_access_key_enabled     = false
   tags                          = local.tags
 
+  # Enable static website hosting for frontend
+  static_website = {
+    frontend = {
+      index_document     = "index.html"
+      error_404_document = "index.html"  # SPA fallback
+    }
+  }
+
   # Allow deployer IP and Azure services through the firewall
   network_rules = {
     default_action = "Deny"
@@ -855,3 +863,200 @@ resource "null_resource" "search_config" {
   }
 }
 
+
+#################################################################################
+# Container App Environment for Backend API
+#################################################################################
+
+module "container_app_environment" {
+  source  = "Azure/avm-res-app-managedenvironment/azurerm"
+  version = "~> 0.2"
+
+  name                           = "${local.identifier}-cae"
+  resource_group_name            = azurerm_resource_group.shared_rg.name
+  location                       = azurerm_resource_group.shared_rg.location
+  log_analytics_workspace = {
+    resource_id = module.log_analytics.resource_id
+  }
+  zone_redundancy_enabled        = false
+  infrastructure_subnet_id       = null  # Use consumption plan without VNet integration
+  internal_load_balancer_enabled = false
+  tags                           = local.tags
+}
+
+
+#################################################################################
+# Container App for Backend API
+#################################################################################
+
+# Get the AI Foundry hub properties to extract the endpoint
+data "azapi_resource" "ai_foundry_hub" {
+  type                   = "Microsoft.CognitiveServices/accounts@2024-10-01"
+  resource_id            = module.ai_foundry.ai_foundry_id
+  response_export_values = ["properties.endpoint"]
+}
+
+locals {
+  # The endpoint property gives us the hub URL directly
+  # Format: https://<hub-name>-<random>.services.ai.azure.com/
+  ai_hub_endpoint     = data.azapi_resource.ai_foundry_hub.output.properties.endpoint
+  ai_project_name     = module.ai_foundry.ai_foundry_project_name["dataagent"]
+  ai_project_endpoint = "${trimsuffix(local.ai_hub_endpoint, "/")}/api/projects/${local.ai_project_name}"
+}
+
+
+
+resource "azurerm_user_assigned_identity" "api_identity" {
+  name                = "${local.identifier}-api-identity"
+  resource_group_name = azurerm_resource_group.shared_rg.name
+  location            = azurerm_resource_group.shared_rg.location
+  tags                = local.tags
+}
+
+# Grant API identity access to ACR
+resource "azurerm_role_assignment" "api_acr_pull" {
+  scope                = module.container_registry.resource_id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.api_identity.principal_id
+}
+
+# Grant API identity access to AI Foundry
+resource "azurerm_role_assignment" "api_ai_foundry" {
+  scope                = module.ai_foundry.ai_foundry_project_id["dataagent"]
+  role_definition_name = "Azure AI Developer"
+  principal_id         = azurerm_user_assigned_identity.api_identity.principal_id
+}
+
+# Grant API identity access to AI Search
+resource "azurerm_role_assignment" "api_search" {
+  scope                = module.ai_search.resource_id
+  role_definition_name = "Search Index Data Reader"
+  principal_id         = azurerm_user_assigned_identity.api_identity.principal_id
+}
+
+# Grant API identity access to SQL Database
+resource "azurerm_role_assignment" "api_sql" {
+  scope                = module.sql_server.resource_id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_user_assigned_identity.api_identity.principal_id
+}
+
+# Grant API identity access to Storage
+resource "azurerm_role_assignment" "api_storage" {
+  scope                = module.ai_storage.resource_id
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.api_identity.principal_id
+}
+
+# Grant API identity access to Cosmos DB
+resource "azurerm_role_assignment" "api_cosmos" {
+  scope                = module.ai_cosmosdb.resource_id
+  role_definition_name = "Cosmos DB Account Reader Role"
+  principal_id         = azurerm_user_assigned_identity.api_identity.principal_id
+}
+
+resource "azurerm_container_app" "api" {
+  name                         = "${local.identifier}-api"
+  resource_group_name          = azurerm_resource_group.shared_rg.name
+  container_app_environment_id = module.container_app_environment.resource_id
+  revision_mode                = "Single"
+  tags                         = local.tags
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.api_identity.id]
+  }
+
+  registry {
+    server   = module.container_registry.resource.login_server
+    identity = azurerm_user_assigned_identity.api_identity.id
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 8000
+    transport        = "http"
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+
+  template {
+    min_replicas = 0
+    max_replicas = 3
+
+    container {
+      name   = "api"
+      image  = "${module.container_registry.resource.login_server}/dataagent-api:latest"
+      cpu    = 1.0
+      memory = "2Gi"
+
+      env {
+        name  = "AZURE_AD_TENANT_ID"
+        value = data.azurerm_client_config.current.tenant_id
+      }
+      env {
+        name  = "AZURE_AD_CLIENT_ID"
+        value = azurerm_user_assigned_identity.api_identity.client_id
+      }
+      env {
+        name  = "AZURE_AI_PROJECT_ENDPOINT"
+        value = local.ai_project_endpoint
+      }
+      env {
+        name  = "AZURE_AI_MODEL_DEPLOYMENT_NAME"
+        value = "gpt-5-chat"
+      }
+      env {
+        name  = "AZURE_AI_EMBEDDING_DEPLOYMENT"
+        value = "embedding-large"
+      }
+
+      env {
+        name  = "AZURE_SEARCH_ENDPOINT"
+        value = "https://${module.ai_search.resource.name}.search.windows.net"
+      }
+      env {
+        name  = "AZURE_SEARCH_INDEX_QUERIES"
+        value = "queries"
+      }
+      env {
+        name  = "AZURE_SEARCH_INDEX_TABLES"
+        value = "tables"
+      }
+      env {
+        name  = "AZURE_SEARCH_INDEX_QUERY_TEMPLATES"
+        value = "query_templates"
+      }
+      env {
+        name  = "AZURE_SQL_SERVER"
+        value = module.sql_server.resource.fully_qualified_domain_name
+      }
+      env {
+        name  = "AZURE_SQL_DATABASE"
+        value = "WideWorldImporters"
+      }
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = module.application_insights.connection_string
+      }
+      env {
+        name  = "ENABLE_INSTRUMENTATION"
+        value = "true"
+      }
+      env {
+        name  = "ENABLE_SENSITIVE_DATA"
+        value = "true"
+      }
+    }
+  }
+
+  depends_on = [
+    azurerm_role_assignment.api_acr_pull,
+    azurerm_role_assignment.api_ai_foundry,
+    azurerm_role_assignment.api_search,
+    azurerm_role_assignment.api_storage
+  ]
+}

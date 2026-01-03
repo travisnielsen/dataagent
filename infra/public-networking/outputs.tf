@@ -67,3 +67,27 @@ output "storage_account_id" {
   value       = module.ai_foundry.storage_account_id
 }
 
+output "static_website_url" {
+  description = "Static website URL for the frontend"
+  value       = module.ai_storage.resource.primary_web_endpoint
+  sensitive   = true
+}
+
+# ==============================================================
+# Container App Outputs
+# ==============================================================
+
+output "container_app_url" {
+  description = "Container App API URL"
+  value       = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+}
+
+output "container_app_identity_client_id" {
+  description = "Container App managed identity client ID"
+  value       = azurerm_user_assigned_identity.api_identity.client_id
+}
+
+output "container_registry_login_server" {
+  description = "Container Registry login server"
+  value       = module.container_registry.resource.login_server
+}

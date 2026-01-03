@@ -32,7 +32,7 @@ The Terraform deployment automatically configures AI Search with vector indexes 
 
 The Search service uses managed identity authentication to access storage and AI Foundry for embedding generation. Sample data is uploaded from the `search-config/` folder during deployment.
 
-## Deployment
+## Deployment (Infrastructure)
 
 In the sub-folder you are working from, create a new `terraform.tfvars` file and populate the following variables:
 
@@ -56,3 +56,141 @@ terraform plan
 # Deploy resources
 terraform apply
 ```
+
+## Deployment - Frontend
+
+The frontend is automatically deployed to Azure Static Website (blob storage) via GitHub Actions when changes are pushed to the `main` branch affecting the `frontend/` folder.
+
+### Prerequisites
+
+1. **Create Azure AD App Registration for GitHub Actions OIDC:**
+
+```bash
+# Create app registration
+az ad app create --display-name "github-actions-dataagent"
+
+# Get the app ID
+APP_ID=$(az ad app list --display-name "github-actions-dataagent" --query "[0].appId" -o tsv)
+
+# Create service principal
+az ad sp create --id $APP_ID
+
+# Create federated credential for GitHub Actions
+az ad app federated-credential create \
+  --id $APP_ID \
+  --parameters '{
+    "name": "github-main-branch",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:travisnielsen/dataagent:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+
+# Grant Storage Blob Data Contributor role to the storage account
+az role assignment create \
+  --assignee $APP_ID \
+  --role "Storage Blob Data Contributor" \
+  --scope "/subscriptions/<SUB_ID>/resourceGroups/<RG>/providers/Microsoft.Storage/storageAccounts/<STORAGE_ACCOUNT>"
+```
+
+2. **Configure GitHub Repository Variables:**
+
+Navigate to your repository's **Settings → Secrets and variables → Actions → Variables** and add the following:
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_CLIENT_ID` | App registration client ID from step 1 |
+| `AZURE_TENANT_ID` | Your Azure tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Your Azure subscription ID |
+| `AZURE_STORAGE_ACCOUNT` | Storage account name (run `terraform output static_website_url` to get the account name) |
+| `NEXT_PUBLIC_API_URL` | Backend API URL (e.g., `https://your-api.azurewebsites.net`) |
+| `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | Frontend app registration client ID for authentication |
+| `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | Azure AD tenant ID for authentication |
+
+### Manual Deployment
+
+To manually deploy the frontend:
+
+```bash
+cd frontend
+
+# Install dependencies and build
+pnpm install
+pnpm build
+
+# Deploy to Azure Static Website
+az storage blob upload-batch \
+  --account-name <STORAGE_ACCOUNT> \
+  --destination '$web' \
+  --source out/ \
+  --overwrite \
+  --auth-mode login
+```
+
+### Workflow Trigger
+
+The GitHub Actions workflow (`.github/workflows/deploy-frontend.yml`) triggers on:
+- Push to `main` branch with changes in `frontend/**`
+- Manual dispatch via GitHub Actions UI
+
+## Deployment - API
+
+The API is containerized and deployed to Azure Container Apps. Follow these steps to build and push the container image.
+
+### Prerequisites
+
+- Docker installed and running
+- Azure CLI authenticated (`az login`)
+- Access to the Azure Container Registry deployed by Terraform
+
+### Build the Container Image
+
+From the `api/` directory, build the Docker image:
+
+```bash
+cd api
+
+# Build the image
+docker build -t dataagent-api .
+```
+
+### Run Locally (Optional)
+
+To test the container locally before pushing:
+
+```bash
+# Run with environment variables from .env file
+docker run -p 8000:8000 --env-file .env dataagent-api
+```
+
+The API will be available at `http://localhost:8000`. Verify it's running by checking the health endpoint: `http://localhost:8000/health`
+
+### Build and Push to Azure Container Registry
+
+Use `az acr build` to build the container image directly in Azure. This ensures the image is built for the correct platform (linux/amd64) regardless of your local machine's architecture.
+
+1. **Get the ACR name from Terraform:**
+
+```bash
+cd infra/public-networking
+terraform output container_registry_login_server
+```
+
+2. **Build and push using ACR Build:**
+
+```bash
+cd api
+
+# Build in Azure and push to ACR (replace <acr_name> with your registry name)
+az acr build --registry <acr_name> --image dataagent-api:latest --platform linux/amd64 .
+```
+
+### Example
+
+```bash
+# Full example with actual registry name
+cd api
+az acr build --registry ay2q3pacr --image dataagent-api:latest --platform linux/amd64 .
+```
+
+> **Note:** Using `az acr build` builds the image on Azure's infrastructure, avoiding architecture mismatches that can occur when building locally on ARM-based machines (e.g., Apple Silicon Macs).
+
