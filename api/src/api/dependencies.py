@@ -2,8 +2,6 @@
 FastAPI dependencies for authentication and shared resources.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -19,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_user_id(request: Request) -> str:
     """
     Get authenticated user ID from request state.
-    
+
     Raises HTTPException 401 if not authenticated.
     """
     user_id = getattr(request.state, "user_id", None)
@@ -36,7 +34,7 @@ def get_optional_user_id(request: Request) -> str | None:
 def get_chat_client(request: Request) -> "AzureAIAgentClient":
     """
     Get the chat client from app state.
-    
+
     Raises HTTPException 503 if not initialized.
     """
     chat_client = getattr(request.app.state, "chat_client", None)
@@ -48,7 +46,7 @@ def get_chat_client(request: Request) -> "AzureAIAgentClient":
 def get_agent(request: Request) -> "ChatAgent":
     """
     Get the agent from app state.
-    
+
     Raises HTTPException 503 if not initialized.
     """
     agent = getattr(request.app.state, "agent", None)
@@ -64,17 +62,17 @@ async def verify_thread_ownership(
 ) -> dict:
     """
     Verify that the current user owns the specified thread.
-    
+
     Returns the thread metadata if ownership is verified.
     Raises HTTPException 403 if access is denied.
     """
     try:
         thread = await chat_client.agents_client.threads.get(thread_id)
         metadata = getattr(thread, "metadata", {}) or {}
-        
+
         if metadata.get("user_id") != user_id:
             raise HTTPException(status_code=403, detail="Access denied")
-        
+
         return {"thread": thread, "metadata": metadata, "user_id": user_id}
     except HTTPException:
         raise
@@ -97,21 +95,21 @@ def extract_message_text(msg) -> str:
 async def get_thread_title(chat_client: "AzureAIAgentClient", thread_id: str, metadata: dict) -> str:
     """
     Get thread title from metadata or first user message.
-    
+
     Returns "New Chat" if no title can be determined.
     """
     title = metadata.get("title")
     if title:
         return title
-    
+
     try:
         async for msg in chat_client.agents_client.messages.list(thread_id=thread_id):
-            if msg.role.value == "user" and msg.content:  # type: ignore[union-attr]
+            if msg.role.value == "user" and msg.content:
                 for part in msg.content:
-                    if hasattr(part, "text") and part.text:  # type: ignore[union-attr]
-                        text_value = getattr(part.text, "value", "") or str(part.text)  # type: ignore[union-attr]
+                    if hasattr(part, "text") and part.text:
+                        text_value = getattr(part.text, "value", "") or str(part.text)
                         return text_value[:50] + "..." if len(text_value) > 50 else text_value
-    except (ValueError, RuntimeError, OSError) as e:  # pylint: disable=broad-exception-caught
+    except (ValueError, RuntimeError, OSError) as e:
         logger.warning("Could not fetch messages for thread %s: %s", thread_id, e)
-    
+
     return "New Chat"

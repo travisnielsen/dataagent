@@ -2,8 +2,6 @@
 Thread management API routes.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -12,24 +10,20 @@ from fastapi import APIRouter, Depends, HTTPException
 if TYPE_CHECKING:
     from agent_framework.azure import AzureAIAgentClient
 
-try:
-    from src.models import ThreadData, ThreadListResponse, UpdateThreadRequest, MessageData, MessagesResponse
-    from src.dependencies import (
-        get_user_id,
-        get_chat_client,
-        verify_thread_ownership,
-        get_thread_title,
-        extract_message_text,
-    )
-except ImportError:
-    from models import ThreadData, ThreadListResponse, UpdateThreadRequest, MessageData, MessagesResponse
-    from dependencies import (
-        get_user_id,
-        get_chat_client,
-        verify_thread_ownership,
-        get_thread_title,
-        extract_message_text,
-    )
+from src.api.models import (
+    ThreadData,
+    ThreadListResponse,
+    UpdateThreadRequest,
+    MessageData,
+    MessagesResponse,
+)
+from src.api.dependencies import (
+    get_user_id,
+    get_chat_client,
+    verify_thread_ownership,
+    get_thread_title,
+    extract_message_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,23 +40,23 @@ async def list_threads(
     """
     try:
         user_threads: list[ThreadData] = []
-        
+
         async for thread in chat_client.agents_client.threads.list(limit=100, order="desc"):
             metadata = getattr(thread, "metadata", {}) or {}
             if metadata.get("user_id") == user_id:
                 title = await get_thread_title(chat_client, thread.id, metadata)
                 status = metadata.get("status", "regular")
                 created_at = thread.created_at.isoformat() if thread.created_at else None
-                
+
                 user_threads.append(ThreadData(
                     thread_id=thread.id,
                     title=title,
                     status=status,
                     created_at=created_at,
                 ))
-        
+
         return ThreadListResponse(threads=user_threads)
-    
+
     except Exception as e:
         logger.error("Error listing threads: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -79,9 +73,9 @@ async def get_thread(
     """
     thread = ownership["thread"]
     metadata = ownership["metadata"]
-    
+
     title = await get_thread_title(chat_client, thread_id, metadata)
-    
+
     return ThreadData(
         thread_id=thread_id,
         title=title,
@@ -101,12 +95,12 @@ async def update_thread(
     Update thread metadata (title, status).
     """
     metadata = dict(ownership["metadata"])
-    
+
     if body.title is not None:
         metadata["title"] = body.title
     if body.status is not None:
         metadata["status"] = body.status
-    
+
     try:
         await chat_client.agents_client.threads.update(thread_id, metadata=metadata)
         return {"success": True}
@@ -123,7 +117,7 @@ async def delete_thread(
 ):
     """
     Delete a thread.
-    
+
     Note: _ownership triggers ownership verification before delete.
     """
     try:
@@ -143,37 +137,37 @@ async def get_thread_messages(
     """
     Get all messages for a thread.
     Returns messages in chronological order (oldest first).
-    
+
     Note: _ownership triggers ownership verification.
     """
     try:
         messages: list[MessageData] = []
         seen_content: set[tuple[str, str]] = set()
-        
+
         async for msg in chat_client.agents_client.messages.list(thread_id=thread_id):
             content = extract_message_text(msg)
-            
+
             if not content.strip():
                 continue
-            
+
             # Deduplicate by role + content
-            content_key = (msg.role.value, content)  # type: ignore[union-attr]
+            content_key = (msg.role.value, content)
             if content_key in seen_content:
                 continue
             seen_content.add(content_key)
-            
+
             messages.append(MessageData(
                 id=msg.id,
-                role=msg.role.value,  # type: ignore[union-attr]
+                role=msg.role.value,
                 content=content,
                 created_at=msg.created_at.isoformat() if msg.created_at else None,
             ))
-        
+
         # Reverse to get chronological order (API returns newest first)
         messages.reverse()
-        
+
         return MessagesResponse(messages=messages)
-    
+
     except HTTPException:
         raise
     except Exception as e:

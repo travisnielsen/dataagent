@@ -48,8 +48,6 @@ Install dependencies using your preferred package manager:
 
    > **Note:** This automatically sets up the Python environment as well. If you have manual issues, you can run: `npm run install:agent`
 
-
-
 ### Set environment variables
 
 Using the output from the application enrollment script, set up your agent credentials. The backend automatically uses Azure when the Azure env vars below are present. Create an `.env` file inside the `agent` folder with one of the following configurations:
@@ -97,6 +95,48 @@ The following commands can be used to start the enviroment locally:
    ```
 
    This will start both the UI and the Microsoft Agent Framework server concurrently.
+
+## Telemetry and DevUI
+
+### Running with DevUI
+
+The Microsoft Agent Framework includes a development UI for testing and debugging agents and workflows. To run the application with DevUI instead of the FastAPI server:
+
+```bash
+cd api
+source .venv/bin/activate
+devui ./src/entities
+```
+
+DevUI will auto-discover the agents and workflows in the `entities` directory and provide an interactive interface for testing. You can run individual agents (`data_agent`, `chat_agent`) or the full `workflow`.
+
+### Enabling Telemetry
+
+The application supports OpenTelemetry for observability. Add these environment variables to your `api/.env` file:
+
+```env
+# Enable OpenTelemetry instrumentation
+ENABLE_INSTRUMENTATION=true
+
+# Option 1: Azure Monitor (production)
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=...
+
+# Option 2: OTLP exporters (local development with Aspire Dashboard, Jaeger, etc.)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+
+# Optional: Enable console output for debugging
+ENABLE_CONSOLE_EXPORTERS=true
+
+# Optional: Log prompts and responses (use with caution - contains sensitive data)
+ENABLE_SENSITIVE_DATA=true
+```
+
+To install the required telemetry packages:
+
+```bash
+cd api
+uv pip install -e ".[observability]"
+```
 
 ## Available Scripts
 

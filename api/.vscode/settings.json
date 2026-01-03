@@ -1,5 +1,5 @@
 {
-  "python.analysis.extraPaths": ["./src"],
+  "python.analysis.extraPaths": ["."],
   "python.analysis.autoSearchPaths": true,
   "python.defaultInterpreterPath": "./.venv/bin/python"
 }
