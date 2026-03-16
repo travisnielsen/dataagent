@@ -22,7 +22,12 @@ private_endpoints_subnet_cidr   = "10.40.0.0/24"
 application_subnet_cidr         = "10.40.1.0/24"
 data_subnet_cidr                = "10.40.2.0/24"
 container_apps_subnet_cidr      = "10.40.3.0/23"
+utility_subnet_cidr             = "10.40.4.0/24"
 ai_agent_services_subnet_cidr   = "10.40.5.0/24"
+bastion_subnet_cidr             = "10.40.6.0/26"
+
+utility_vm_admin_password        = "<replace-with-strong-password>"
+utility_vm_size                  = "Standard_D4s_v3"
 
 sql_database_name               = "WideWorldImportersStd"
 enable_local_exec_provisioning = false

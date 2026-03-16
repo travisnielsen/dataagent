@@ -30,8 +30,40 @@ output "subnet_ids" {
     application       = azurerm_subnet.application.id
     container_apps    = azurerm_subnet.container_apps.id
     ai_agent_services = azurerm_subnet.ai_agent_services.id
+    utility           = azurerm_subnet.utility.id
+    azure_bastion     = azurerm_subnet.azure_bastion.id
     data              = azurerm_subnet.data.id
   }
+}
+
+output "utility_vm_name" {
+  description = "Utility VM name."
+  value       = azurerm_windows_virtual_machine.utility.name
+}
+
+output "utility_vm_private_ip" {
+  description = "Utility VM private IP address."
+  value       = azurerm_network_interface.utility_vm.private_ip_address
+}
+
+output "utility_vm_id" {
+  description = "Utility VM resource ID."
+  value       = azurerm_windows_virtual_machine.utility.id
+}
+
+output "bastion_name" {
+  description = "Azure Bastion host name."
+  value       = azurerm_bastion_host.main.name
+}
+
+output "bastion_id" {
+  description = "Azure Bastion host resource ID."
+  value       = azurerm_bastion_host.main.id
+}
+
+output "bastion_public_ip" {
+  description = "Public IP address for Azure Bastion."
+  value       = azurerm_public_ip.bastion.ip_address
 }
 
 output "private_dns_zone_ids" {

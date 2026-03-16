@@ -96,6 +96,20 @@ resource "azurerm_subnet" "ai_agent_services" {
   }
 }
 
+resource "azurerm_subnet" "utility" {
+  name                 = "utility"
+  resource_group_name  = azurerm_resource_group.private_rg.name
+  virtual_network_name = azurerm_virtual_network.private_vnet.name
+  address_prefixes     = [var.utility_subnet_cidr]
+}
+
+resource "azurerm_subnet" "azure_bastion" {
+  name                 = "AzureBastionSubnet"
+  resource_group_name  = azurerm_resource_group.private_rg.name
+  virtual_network_name = azurerm_virtual_network.private_vnet.name
+  address_prefixes     = [var.bastion_subnet_cidr]
+}
+
 resource "azurerm_subnet" "data" {
   name                 = "data"
   resource_group_name  = azurerm_resource_group.private_rg.name
@@ -110,6 +124,8 @@ resource "time_sleep" "wait_for_network_ready" {
     azurerm_subnet.application,
     azurerm_subnet.container_apps,
     azurerm_subnet.ai_agent_services,
+    azurerm_subnet.utility,
+    azurerm_subnet.azure_bastion,
     azurerm_subnet.data,
   ]
   create_duration = "30s"
