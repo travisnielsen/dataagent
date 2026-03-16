@@ -98,10 +98,34 @@ variable "ai_agent_services_subnet_cidr" {
   description = "CIDR for the AI Foundry Agent Service network injection subnet."
 }
 
+variable "utility_subnet_cidr" {
+  type        = string
+  default     = "10.40.4.0/24"
+  description = "CIDR for the utility subnet hosting general-purpose IaaS compute."
+}
+
+variable "bastion_subnet_cidr" {
+  type        = string
+  default     = "10.40.6.0/26"
+  description = "CIDR for AzureBastionSubnet (must be /26 or larger address space)."
+}
+
 variable "data_subnet_cidr" {
   type        = string
   default     = "10.40.2.0/24"
   description = "CIDR for the data tier subnet."
+}
+
+variable "utility_vm_admin_password" {
+  type        = string
+  description = "Admin password for the utility VM local administrator account."
+  sensitive   = true
+}
+
+variable "utility_vm_size" {
+  type        = string
+  default     = "Standard_D4s_v3"
+  description = "Azure VM size for the utility VM."
 }
 
 variable "private_dns_zone_names" {
