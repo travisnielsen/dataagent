@@ -1,15 +1,27 @@
 "use client";
 
+import { loginRequest, msalConfig } from "@/lib/msalConfig";
+import {
+  AuthenticationResult,
+  BrowserAuthError,
+  EventMessage,
+  EventType,
+  PublicClientApplication,
+} from "@azure/msal-browser";
 import { MsalProvider } from "@azure/msal-react";
-import { PublicClientApplication, EventType, EventMessage, AuthenticationResult } from "@azure/msal-browser";
-import { msalConfig, loginRequest } from "@/lib/msalConfig";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function MsalAuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const msalInstanceRef = useRef<PublicClientApplication | null>(null);
+  const initStartedRef = useRef(false);
 
   useEffect(() => {
+    if (initStartedRef.current) {
+      return;
+    }
+    initStartedRef.current = true;
+
     const initializeMsal = async () => {
       // Create instance lazily on the client to avoid SSR "window is not defined" errors
       if (!msalInstanceRef.current) {
@@ -18,9 +30,22 @@ export function MsalAuthProvider({ children }: { children: React.ReactNode }) {
       const msalInstance = msalInstanceRef.current;
 
       await msalInstance.initialize();
-      
+
       // Handle redirect response
-      await msalInstance.handleRedirectPromise();
+      try {
+        await msalInstance.handleRedirectPromise();
+      } catch (error) {
+        // This can happen in local/dev when no redirect request is cached.
+        // It is recoverable and should not crash startup.
+        if (
+          error instanceof BrowserAuthError &&
+          error.errorCode === "no_token_request_cache_error"
+        ) {
+          console.warn("MSAL redirect cache miss during startup, continuing.", error);
+        } else {
+          throw error;
+        }
+      }
 
       // Set active account if there is one
       const accounts = msalInstance.getAllAccounts();
@@ -43,7 +68,11 @@ export function MsalAuthProvider({ children }: { children: React.ReactNode }) {
       });
     };
 
-    initializeMsal();
+    initializeMsal().catch((error) => {
+      console.error("Failed to initialize MSAL provider", error);
+      // Avoid blank screen on init failure; downstream auth flow can still recover.
+      setIsInitialized(true);
+    });
   }, []);
 
   if (!isInitialized || !msalInstanceRef.current) {

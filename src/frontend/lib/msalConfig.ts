@@ -1,8 +1,16 @@
 import { Configuration, LogLevel } from "@azure/msal-browser";
 
+const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || "YOUR_CLIENT_ID";
+const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || "common";
+const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+
+// Use a dedicated static page for hidden iframe token renewal.
+// This avoids CSP/frame header conflicts on the main app shell.
+export const silentRedirectUri = `${origin}/auth/silent/`;
+
 /**
  * MSAL Configuration
- * 
+ *
  * To configure this for your Azure AD tenant:
  * 1. Register an app in Azure AD (Portal > App registrations > New registration)
  * 2. Set the redirect URI to http://localhost:3000 (for development)
@@ -12,10 +20,11 @@ import { Configuration, LogLevel } from "@azure/msal-browser";
 
 export const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || "YOUR_CLIENT_ID",
-    authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || "common"}`,
-    redirectUri: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000",
-    postLogoutRedirectUri: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000",
+    clientId,
+    authority: `https://login.microsoftonline.com/${tenantId}`,
+    redirectUri: origin,
+    postLogoutRedirectUri: origin,
+    navigateToLoginRequestUrl: true,
   },
   cache: {
     cacheLocation: "localStorage", // Use localStorage for persistence across tabs/sessions
@@ -56,9 +65,8 @@ export const loginRequest = {
 //   which will return an access token for the application itself
 export const apiRequest = {
   scopes: [
-    // Use openid and profile to get a proper JWT access token
-    // If you've exposed API scopes, add them here
-    `api://${process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID}/access_as_user`,
+    // Use a dedicated API scope when configured, otherwise default to api://<client-id>/access_as_user.
+    process.env.NEXT_PUBLIC_AZURE_AD_API_SCOPE || `api://${clientId}/access_as_user`,
   ],
 };
 
