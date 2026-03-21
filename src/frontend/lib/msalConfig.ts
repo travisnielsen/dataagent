@@ -24,7 +24,6 @@ export const msalConfig: Configuration = {
     authority: `https://login.microsoftonline.com/${tenantId}`,
     redirectUri: origin,
     postLogoutRedirectUri: origin,
-    navigateToLoginRequestUrl: true,
   },
   cache: {
     cacheLocation: "localStorage", // Use localStorage for persistence across tabs/sessions
