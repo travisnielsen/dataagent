@@ -1,9 +1,23 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/_next/*", "/images/*", "/*.ico", "/*.png", "/*.svg", "/*.json"]
+    "exclude": [
+      "/_next/*",
+      "/images/*",
+      "/*.ico",
+      "/*.png",
+      "/*.svg",
+      "/*.json"
+    ]
   },
   "routes": [
+    {
+      "route": "/auth/silent*",
+      "headers": {
+        "X-Frame-Options": "SAMEORIGIN",
+        "Content-Security-Policy": "frame-ancestors 'self'"
+      }
+    },
     {
       "route": "/api/*",
       "statusCode": 404

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
-import { apiRequest, loginRequest } from "./msalConfig";
+import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+import { useCallback, useEffect, useState } from "react";
+import { apiRequest, silentRedirectUri } from "./msalConfig";
 
 /**
  * Hook to acquire an access token for the backend API.
@@ -32,50 +32,27 @@ export function useAccessToken() {
       const response = await instance.acquireTokenSilent({
         ...apiRequest,
         account: accounts[0],
+        redirectUri: silentRedirectUri,
       });
       console.log("Token acquired successfully for API scope");
       setAccessToken(response.accessToken);
       return response.accessToken;
-    } catch (apiScopeError) {
-      console.warn("Failed to acquire token for API scope, trying fallback:", apiScopeError);
-      
-      // Fallback: try with basic scopes and use ID token
+    } catch (silentError) {
+      console.warn("Silent token acquisition failed, trying interactive fallback:", silentError);
+
       try {
-        const response = await instance.acquireTokenSilent({
-          scopes: ["openid", "profile", "User.Read"],
-          account: accounts[0],
-        });
-        console.log("Token acquired with fallback scopes");
-        // Use the ID token if access token isn't a valid JWT
-        const token = response.accessToken;
-        // Check if it's a valid JWT (should have 3 parts)
-        if (token && token.split('.').length === 3) {
-          setAccessToken(token);
-          return token;
-        } else if (response.idToken) {
-          console.log("Using ID token as fallback");
-          setAccessToken(response.idToken);
-          return response.idToken;
-        }
-        throw new Error("No valid token available");
-      } catch (fallbackError) {
-        console.error("Fallback token acquisition failed:", fallbackError);
-        
-        // Try interactive as last resort
-        if (apiScopeError instanceof InteractionRequiredAuthError) {
-          try {
-            const response = await instance.acquireTokenPopup(apiRequest);
-            console.log("Token acquired via popup");
-            setAccessToken(response.accessToken);
-            return response.accessToken;
-          } catch (interactiveError) {
-            console.error("Interactive token acquisition failed:", interactiveError);
-            setError(interactiveError as Error);
-            setAccessToken(null);
-            return null;
-          }
-        }
-        setError(apiScopeError as Error);
+        const response = await instance.acquireTokenPopup(apiRequest);
+        console.log("Token acquired via popup fallback");
+        setAccessToken(response.accessToken);
+        return response.accessToken;
+      } catch (interactiveError) {
+        // Preserve the original interaction-required error when available.
+        const finalError =
+          silentError instanceof InteractionRequiredAuthError
+            ? silentError
+            : (interactiveError as Error);
+        console.error("Interactive token acquisition failed:", interactiveError);
+        setError(finalError);
         setAccessToken(null);
         return null;
       }
