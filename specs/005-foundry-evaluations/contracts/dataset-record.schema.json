@@ -1,0 +1,97 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "EvaluationDatasetRecord",
+    "description": "Single row in an evaluation dataset (JSONL format)",
+    "type": "object",
+    "required": [
+        "query",
+        "expected_behavior",
+        "scenario_class"
+    ],
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "User question or prompt"
+        },
+        "expected_behavior": {
+            "type": "string",
+            "description": "Rubric describing expected response behavior for LLM-judge scoring"
+        },
+        "context": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "Additional context (e.g., conversation history summary)"
+        },
+        "ground_truth_sql": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "Expected SQL query (for extraction/correctness evaluation)"
+        },
+        "ground_truth_params": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "description": "Expected extracted parameter values",
+            "additionalProperties": true
+        },
+        "scenario_class": {
+            "type": "string",
+            "enum": [
+                "template",
+                "dynamic",
+                "clarification",
+                "what_if",
+                "conversation"
+            ],
+            "description": "Category of test scenario"
+        },
+        "conversation": {
+            "type": [
+                "array",
+                "null"
+            ],
+            "description": "Full message history including tool calls and results",
+            "items": {
+                "type": "object",
+                "required": [
+                    "role",
+                    "content"
+                ],
+                "properties": {
+                    "role": {
+                        "type": "string",
+                        "enum": [
+                            "user",
+                            "assistant",
+                            "tool"
+                        ]
+                    },
+                    "content": {
+                        "type": "string"
+                    },
+                    "tool_calls": {
+                        "type": [
+                            "array",
+                            "null"
+                        ],
+                        "items": {
+                            "type": "object"
+                        }
+                    },
+                    "tool_call_id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "additionalProperties": false
+}

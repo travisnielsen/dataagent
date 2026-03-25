@@ -1,0 +1,66 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "EvaluationRunRequest",
+    "description": "Request to trigger an evaluation run",
+    "type": "object",
+    "required": [
+        "dataset_name",
+        "dataset_version",
+        "evaluators",
+        "trigger"
+    ],
+    "properties": {
+        "dataset_name": {
+            "type": "string",
+            "description": "Name of the evaluation dataset",
+            "examples": [
+                "cadence-eval-gold"
+            ]
+        },
+        "dataset_version": {
+            "type": "string",
+            "description": "Version of the dataset to evaluate against",
+            "pattern": "^v\\d+$",
+            "examples": [
+                "v1"
+            ]
+        },
+        "evaluators": {
+            "type": "array",
+            "description": "Evaluator names to include in this run",
+            "items": {
+                "type": "string"
+            },
+            "minItems": 1,
+            "examples": [
+                [
+                    "intent_resolution",
+                    "task_adherence",
+                    "relevance",
+                    "tool_call_accuracy",
+                    "indirect_attack"
+                ]
+            ]
+        },
+        "trigger": {
+            "type": "string",
+            "enum": [
+                "ci_pr",
+                "nightly",
+                "manual"
+            ],
+            "description": "What triggered this evaluation run"
+        },
+        "config_version": {
+            "type": "string",
+            "default": "v1",
+            "description": "Evaluation configuration version"
+        },
+        "judge_model_deployment": {
+            "type": "string",
+            "description": "Model deployment name for LLM-judge evaluators",
+            "default": "gpt-4o"
+        }
+    },
+    "additionalProperties": false
+}
