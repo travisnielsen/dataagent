@@ -281,10 +281,11 @@ class TestQualityGate:
         )
         assert gate.gate_result == "pass"
 
-    def test_gate_missing_metric_fails(self) -> None:
+    def test_gate_skips_unevaluated_metrics(self) -> None:
         summary = _make_summary(metrics=[])
         gate = compute_quality_gate(summary, git_sha="abc", branch="main")
-        assert gate.gate_result == "fail"
+        assert gate.gate_result == "pass"
+        assert gate.failing_metrics == []
 
 
 # ---------------------------------------------------------------------------

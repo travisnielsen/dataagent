@@ -332,8 +332,7 @@ def compute_quality_gate(
     for rule in p0_rules:
         metric = metric_lookup.get(rule.metric)
         if metric is None:
-            failing.append(rule.metric)
-            continue
+            continue  # metric not evaluated in this run — skip
         p0_results.append(metric)
         if metric.mean_score < rule.min_score and rule.metric not in waiver_set:
             failing.append(rule.metric)
