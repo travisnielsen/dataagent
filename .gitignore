@@ -42,6 +42,11 @@ package-lock.json
 .beads/
 .beads-db/
 
+# Foundry (keep metadata, ignore caches)
+.foundry/datasets/
+.foundry/evaluators/
+.foundry/results/
+
 # Misc
 *.log
 tmp/
