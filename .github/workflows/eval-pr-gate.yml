@@ -1,0 +1,69 @@
+name: Evaluation PR Gate
+
+on:
+    pull_request:
+        branches: [main]
+        paths:
+            - "src/backend/**"
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    eval-pr-gate:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v4
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.11
+
+            - name: Install dependencies
+              run: uv sync --all-extras --dev
+
+            - name: Run P0 evaluation gate
+              env:
+                  AZURE_AI_PROJECT_ENDPOINT: ${{ secrets.AZURE_AI_PROJECT_ENDPOINT }}
+                  AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
+              run: |
+                  uv run python -m evaluations \
+                    --dataset src/backend/evaluations/datasets/cadence-eval-p0-v1.jsonl \
+                    --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy,indirect_attack,sql_safety,param_extraction_correctness \
+                    --trigger ci_pr \
+                    --gate
+
+            - name: Post evaluation summary
+              if: always()
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const resultPath = '.foundry/results/latest-summary.json';
+                      if (!fs.existsSync(resultPath)) {
+                        core.info('No evaluation summary found');
+                        return;
+                      }
+                      const summary = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+                      const metrics = summary.metrics || [];
+                      let body = '## Evaluation PR Gate Results\n\n';
+                      body += `| Metric | Mean Score | Pass Rate | Threshold | Status |\n`;
+                      body += `|--------|-----------|-----------|-----------|--------|\n`;
+                      for (const m of metrics) {
+                        const status = m.passed ? '✅' : '❌';
+                        body += `| ${m.metric} | ${m.mean_score.toFixed(3)} | ${(m.pass_rate * 100).toFixed(1)}% | ${m.threshold || 'N/A'} | ${status} |\n`;
+                      }
+                      body += `\n**Overall**: ${summary.overall_pass ? '✅ PASS' : '❌ FAIL'}`;
+                      await github.rest.issues.createComment({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        body: body
+                      });

@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     allow_anonymous: bool = False
     """Allow unauthenticated access to the API."""
 
+    # -- Evaluation --------------------------------------------------------
+
+    eval_judge_model_deployment: str = "gpt-4o"
+    """Model deployment for LLM-judge evaluators."""
+
+    eval_default_dataset: str = "cadence-eval-gold-v1"
+    """Default evaluation dataset name."""
+
 
 def get_settings() -> Settings:
     """Return a cached ``Settings`` instance.

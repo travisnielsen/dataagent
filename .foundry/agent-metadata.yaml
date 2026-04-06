@@ -1,0 +1,8 @@
+# Cadence NL2SQL Agent
+# Foundry agent metadata for evaluation integration
+
+name: cadence-nl2sql
+description: Multi-agent NL2SQL assistant with evaluation pipeline
+version: "0.1.0"
+
+testCases: []

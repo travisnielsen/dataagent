@@ -15,10 +15,10 @@
 
 **Purpose**: Project initialization, dependency installation, and evaluation package scaffolding
 
-- [ ] T001 Add `azure-ai-evaluation` dependency to `pyproject.toml` and run `uv sync --all-extras --dev`
-- [ ] T002 Create evaluation package structure with `src/backend/evaluations/__init__.py` and `src/backend/evaluations/evaluators/__init__.py`
-- [ ] T003 [P] Create `.foundry/` directory structure with `.foundry/agent-metadata.yaml`, `.foundry/datasets/`, `.foundry/evaluators/`, `.foundry/results/` and add `.foundry/datasets/`, `.foundry/evaluators/`, `.foundry/results/` to `.gitignore`
-- [ ] T004 [P] Add `src/backend/evaluations/datasets/` directory with `.gitkeep` for gold dataset storage
+- [x] T001 Add `azure-ai-evaluation` dependency to `pyproject.toml` and run `uv sync --all-extras --dev`
+- [x] T002 Create evaluation package structure with `src/backend/evaluations/__init__.py` and `src/backend/evaluations/evaluators/__init__.py`
+- [x] T003 [P] Create `.foundry/` directory structure with `.foundry/agent-metadata.yaml`, `.foundry/datasets/`, `.foundry/evaluators/`, `.foundry/results/` and add `.foundry/datasets/`, `.foundry/evaluators/`, `.foundry/results/` to `.gitignore`
+- [x] T004 [P] Add `src/backend/evaluations/datasets/` directory with `.gitkeep` for gold dataset storage
 
 ---
 
@@ -28,13 +28,13 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Implement `ThresholdRule`, `EvaluatorRef`, and `EvaluationConfig` Pydantic models in `src/backend/evaluations/config.py` per data-model.md
-- [ ] T006 Implement `DatasetRecord` and `DatasetMetadata` Pydantic models in `src/backend/evaluations/models.py` per data-model.md and `contracts/dataset-record.schema.json`
-- [ ] T007 Implement `EvaluationRun`, `RunSummary`, and `MetricResult` Pydantic models in `src/backend/evaluations/models.py` per data-model.md and `contracts/evaluation-run-summary.schema.json`
-- [ ] T008 Implement `FailureRecord`, `FailureCluster`, `DeltaComparison`, `MetricDelta`, and `QualityGateDecision` Pydantic models in `src/backend/evaluations/models.py` per data-model.md
-- [ ] T009 [P] Implement evaluator profile models (`BuiltinEvaluatorProfile`, `CustomCodeEvaluatorProfile`, `CustomPromptEvaluatorProfile`) in `src/backend/evaluations/config.py` per data-model.md
-- [ ] T010 Define default evaluation contract with primary metrics (intent routing accuracy, clarification quality, SQL safety, answer usefulness) and secondary metrics (tool-call success, latency, zero-result quality) as default `EvaluationConfig` in `src/backend/evaluations/config.py`
-- [ ] T011 Export all public models and config from `src/backend/evaluations/__init__.py`
+- [x] T005 Implement `ThresholdRule`, `EvaluatorRef`, and `EvaluationConfig` Pydantic models in `src/backend/evaluations/config.py` per data-model.md
+- [x] T006 Implement `DatasetRecord` and `DatasetMetadata` Pydantic models in `src/backend/evaluations/models.py` per data-model.md and `contracts/dataset-record.schema.json`
+- [x] T007 Implement `EvaluationRun`, `RunSummary`, and `MetricResult` Pydantic models in `src/backend/evaluations/models.py` per data-model.md and `contracts/evaluation-run-summary.schema.json`
+- [x] T008 Implement `FailureRecord`, `FailureCluster`, `DeltaComparison`, `MetricDelta`, and `QualityGateDecision` Pydantic models in `src/backend/evaluations/models.py` per data-model.md
+- [x] T009 [P] Implement evaluator profile models (`BuiltinEvaluatorProfile`, `CustomCodeEvaluatorProfile`, `CustomPromptEvaluatorProfile`) in `src/backend/evaluations/config.py` per data-model.md
+- [x] T010 Define default evaluation contract with primary metrics (intent routing accuracy, clarification quality, SQL safety, answer usefulness) and secondary metrics (tool-call success, latency, zero-result quality) as default `EvaluationConfig` in `src/backend/evaluations/config.py`
+- [x] T011 Export all public models and config from `src/backend/evaluations/__init__.py`
 
 **Checkpoint**: Foundation ready — all evaluation models, config, and contract are defined. User story implementation can begin.
 
@@ -48,11 +48,11 @@
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Define Phase 1 built-in evaluator profiles (intent_resolution, task_adherence, tool_call_accuracy, relevance, indirect_attack) with threshold defaults in `src/backend/evaluations/config.py`
-- [ ] T013 [P] [US1] Define pipeline-specific evaluation targets mapping DataAssistant, ParameterExtractor, QueryValidator, QueryBuilder to corresponding metrics in `src/backend/evaluations/config.py`
-- [ ] T014 [P] [US1] Define Phase 2 custom evaluator profiles (sql_safety, param_extraction_correctness, answer_adequacy, clarification_quality) with threshold defaults in `src/backend/evaluations/config.py`
-- [ ] T015 [US1] Implement `load_config()` and `save_config()` functions for reading/writing evaluation configuration from YAML in `src/backend/evaluations/config.py`
-- [ ] T016 [US1] Write unit tests for evaluation config loading, validation, and default contract completeness in `tests/unit/test_eval_config.py`
+- [x] T012 [US1] Define Phase 1 built-in evaluator profiles (intent_resolution, task_adherence, tool_call_accuracy, relevance, indirect_attack) with threshold defaults in `src/backend/evaluations/config.py`
+- [x] T013 [P] [US1] Define pipeline-specific evaluation targets mapping DataAssistant, ParameterExtractor, QueryValidator, QueryBuilder to corresponding metrics in `src/backend/evaluations/config.py`
+- [x] T014 [P] [US1] Define Phase 2 custom evaluator profiles (sql_safety, param_extraction_correctness, answer_adequacy, clarification_quality) with threshold defaults in `src/backend/evaluations/config.py`
+- [x] T015 [US1] Implement `load_config()` and `save_config()` functions for reading/writing evaluation configuration from YAML in `src/backend/evaluations/config.py`
+- [x] T016 [US1] Write unit tests for evaluation config loading, validation, and default contract completeness in `tests/unit/test_eval_config.py`
 
 **Checkpoint**: Evaluation contract is defined, versioned, and testable. All metrics have definitions and thresholds.
 
@@ -66,14 +66,14 @@
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Implement dataset loading and validation functions (`load_dataset()`, `validate_dataset()`) in `src/backend/evaluations/runner.py` — validates JSONL records against `DatasetRecord` schema
-- [ ] T018 [US2] Curate initial gold dataset `cadence-eval-gold-v1.jsonl` with 200-500 prompts spanning template, dynamic, clarification, what-if, and conversation scenario classes in `src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl`
-- [ ] T019 [US2] Extract P0 subset `cadence-eval-p0-v1.jsonl` (~50 critical prompts covering core scenarios) from gold dataset in `src/backend/evaluations/datasets/cadence-eval-p0-v1.jsonl`
-- [ ] T020 [P] [US2] Implement `DatasetMetadata` generation — compute `record_count`, `scenario_distribution`, and `sanitization_status` from loaded JSONL in `src/backend/evaluations/runner.py`
-- [ ] T021 [US2] Implement trace harvesting with KQL templates (error harvest, latency harvest, low-eval-score harvest) in `src/backend/evaluations/harvest.py` — uses `azure-monitor-opentelemetry` for App Insights KQL queries
-- [ ] T022 [US2] Implement data sanitization pass in `src/backend/evaluations/harvest.py` — removes/masks sensitive fields from trace-harvested records before dataset persistence
-- [ ] T023 [US2] Implement dataset versioning: version tagging (`v<N>` convention), Foundry dataset upload via `evaluation_dataset_create`, and `dataset_uri` persistence in `src/backend/evaluations/harvest.py`
-- [ ] T024 [US2] Write unit tests for dataset loading, validation, metadata generation, and sanitization in `tests/unit/test_eval_datasets.py`
+- [x] T017 [US2] Implement dataset loading and validation functions (`load_dataset()`, `validate_dataset()`) in `src/backend/evaluations/runner.py` — validates JSONL records against `DatasetRecord` schema
+- [x] T018 [US2] Curate initial gold dataset `cadence-eval-gold-v1.jsonl` with 200-500 prompts spanning template, dynamic, clarification, what-if, and conversation scenario classes in `src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl`
+- [x] T019 [US2] Extract P0 subset `cadence-eval-p0-v1.jsonl` (~50 critical prompts covering core scenarios) from gold dataset in `src/backend/evaluations/datasets/cadence-eval-p0-v1.jsonl`
+- [x] T020 [P] [US2] Implement `DatasetMetadata` generation — compute `record_count`, `scenario_distribution`, and `sanitization_status` from loaded JSONL in `src/backend/evaluations/runner.py`
+- [x] T021 [US2] Implement trace harvesting with KQL templates (error harvest, latency harvest, low-eval-score harvest) in `src/backend/evaluations/harvest.py` — uses `azure-monitor-opentelemetry` for App Insights KQL queries
+- [x] T022 [US2] Implement data sanitization pass in `src/backend/evaluations/harvest.py` — removes/masks sensitive fields from trace-harvested records before dataset persistence
+- [x] T023 [US2] Implement dataset versioning: version tagging (`v<N>` convention), Foundry dataset upload via `evaluation_dataset_create`, and `dataset_uri` persistence in `src/backend/evaluations/harvest.py`
+- [x] T024 [US2] Write unit tests for dataset loading, validation, metadata generation, and sanitization in `tests/unit/test_eval_datasets.py`
 
 **Checkpoint**: Gold dataset and trace harvesting pipeline are functional. Datasets are versioned and bound to evaluation runs.
 
@@ -87,38 +87,38 @@
 
 ### Implementation for User Story 3 — Phase 1 Built-In Evaluators
 
-- [ ] T025 [US3] Implement `run_evaluation()` async function in `src/backend/evaluations/runner.py` — orchestrates dataset load → evaluator init → evaluation execution → result aggregation
-- [ ] T026 [US3] Integrate Phase 1 built-in evaluators (`IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `RelevanceEvaluator`, `ToolCallAccuracyEvaluator`, `indirect_attack`) via `azure-ai-evaluation` SDK in `src/backend/evaluations/runner.py`
-- [ ] T027 [US3] Implement conversation history preparation — include full message history with tool calls and tool results as evaluator input in `src/backend/evaluations/runner.py` (FR-009)
-- [ ] T028 [US3] Implement `RunSummary` aggregation — compute `MetricResult` statistics (mean, median, p5, p95, pass_rate) and `overall_pass` from per-record scores in `src/backend/evaluations/runner.py`
-- [ ] T029 [P] [US3] Implement SSE step events for evaluation lifecycle using existing `ProgressReporter` protocol in `src/backend/evaluations/runner.py` — emits dataset_loading, evaluator_init, evaluation_running, result_aggregation milestones
-- [ ] T030 [P] [US3] Implement `QualityGateDecision` computation — check P0 thresholds, compile failing metrics, produce gate pass/fail in `src/backend/evaluations/runner.py`
+- [x] T025 [US3] Implement `run_evaluation()` async function in `src/backend/evaluations/runner.py` — orchestrates dataset load → evaluator init → evaluation execution → result aggregation
+- [x] T026 [US3] Integrate Phase 1 built-in evaluators (`IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `RelevanceEvaluator`, `ToolCallAccuracyEvaluator`, `indirect_attack`) via `azure-ai-evaluation` SDK in `src/backend/evaluations/runner.py`
+- [x] T027 [US3] Implement conversation history preparation — include full message history with tool calls and tool results as evaluator input in `src/backend/evaluations/runner.py` (FR-009)
+- [x] T028 [US3] Implement `RunSummary` aggregation — compute `MetricResult` statistics (mean, median, p5, p95, pass_rate) and `overall_pass` from per-record scores in `src/backend/evaluations/runner.py`
+- [x] T029 [P] [US3] Implement SSE step events for evaluation lifecycle using existing `ProgressReporter` protocol in `src/backend/evaluations/runner.py` — emits dataset_loading, evaluator_init, evaluation_running, result_aggregation milestones
+- [x] T030 [P] [US3] Implement `QualityGateDecision` computation — check P0 thresholds, compile failing metrics, produce gate pass/fail in `src/backend/evaluations/runner.py`
 
 ### Implementation for User Story 3 — Phase 2 Custom Code Evaluators
 
-- [ ] T031 [US3] Implement SQL safety code evaluator in `src/backend/evaluations/evaluators/sql_safety.py` — reuses `query_validator` logic for allowed tables, SELECT-only, parameterized execution, no injection patterns; returns boolean pass/fail
-- [ ] T032 [P] [US3] Implement parameter extraction correctness evaluator in `src/backend/evaluations/evaluators/param_extraction.py` — compares extracted parameters against `ground_truth_params` with field-level match scoring
+- [x] T031 [US3] Implement SQL safety code evaluator in `src/backend/evaluations/evaluators/sql_safety.py` — reuses `query_validator` logic for allowed tables, SELECT-only, parameterized execution, no injection patterns; returns boolean pass/fail
+- [x] T032 [P] [US3] Implement parameter extraction correctness evaluator in `src/backend/evaluations/evaluators/param_extraction.py` — compares extracted parameters against `ground_truth_params` with field-level match scoring
 
 ### Implementation for User Story 3 — Phase 2 Custom Prompt Evaluators
 
-- [ ] T033 [US3] Implement business answer adequacy prompt evaluator in `src/backend/evaluations/evaluators/answer_adequacy.py` — LLM-judge scoring response against `expected_behavior` rubric (1-5 ordinal scale)
-- [ ] T034 [P] [US3] Implement clarification quality prompt evaluator in `src/backend/evaluations/evaluators/clarification_quality.py` — LLM-judge scoring for single-question, minimally ambiguous, actionable criteria (boolean pass/fail)
+- [x] T033 [US3] Implement business answer adequacy prompt evaluator in `src/backend/evaluations/evaluators/answer_adequacy.py` — LLM-judge scoring response against `expected_behavior` rubric (1-5 ordinal scale)
+- [x] T034 [P] [US3] Implement clarification quality prompt evaluator in `src/backend/evaluations/evaluators/clarification_quality.py` — LLM-judge scoring for single-question, minimally ambiguous, actionable criteria (boolean pass/fail)
 
 ### Implementation for User Story 3 — CI Workflows
 
-- [ ] T035 [US3] Create PR gate GitHub Actions workflow in `.github/workflows/eval-pr-gate.yml` — triggers on PR to `main` modifying `src/backend/`, runs P0 subset, fails on threshold regression, posts metric summary as PR comment
-- [ ] T036 [P] [US3] Create nightly evaluation GitHub Actions workflow in `.github/workflows/eval-nightly.yml` — scheduled daily cron, runs full suite via Foundry cloud batch eval, publishes results, opens GitHub issue on regression
+- [x] T035 [US3] Create PR gate GitHub Actions workflow in `.github/workflows/eval-pr-gate.yml` — triggers on PR to `main` modifying `src/backend/`, runs P0 subset, fails on threshold regression, posts metric summary as PR comment
+- [x] T036 [P] [US3] Create nightly evaluation GitHub Actions workflow in `.github/workflows/eval-nightly.yml` — scheduled daily cron, runs full suite via Foundry cloud batch eval, publishes results, opens GitHub issue on regression
 
 ### Implementation for User Story 3 — CLI Entry Point
 
-- [ ] T037 [US3] Implement CLI entry point `src/backend/evaluations/__main__.py` — supports `--dataset`, `--evaluators`, `--trigger`, `--gate` flags per quickstart.md
+- [x] T037 [US3] Implement CLI entry point `src/backend/evaluations/__main__.py` — supports `--dataset`, `--evaluators`, `--trigger`, `--gate` flags per quickstart.md
 
 ### Tests for User Story 3
 
-- [ ] T038 [P] [US3] Write unit tests for evaluation runner orchestration (mocked evaluators, dataset load, summary aggregation) in `tests/unit/test_eval_runner.py`
-- [ ] T039 [P] [US3] Write unit tests for SQL safety evaluator (known-safe and known-unsafe queries) in `tests/unit/test_eval_sql_safety.py`
-- [ ] T040 [P] [US3] Write unit tests for parameter extraction evaluator (exact/partial/missing parameter matches) in `tests/unit/test_eval_param_extraction.py`
-- [ ] T041 [P] [US3] Write unit tests for quality gate decision logic (pass, fail, waiver scenarios) in `tests/unit/test_eval_runner.py`
+- [x] T038 [P] [US3] Write unit tests for evaluation runner orchestration (mocked evaluators, dataset load, summary aggregation) in `tests/unit/test_eval_runner.py`
+- [x] T039 [P] [US3] Write unit tests for SQL safety evaluator (known-safe and known-unsafe queries) in `tests/unit/test_eval_sql_safety.py`
+- [x] T040 [P] [US3] Write unit tests for parameter extraction evaluator (exact/partial/missing parameter matches) in `tests/unit/test_eval_param_extraction.py`
+- [x] T041 [P] [US3] Write unit tests for quality gate decision logic (pass, fail, waiver scenarios) in `tests/unit/test_eval_runner.py`
 
 **Checkpoint**: Full evaluation pipeline is functional — built-in + custom evaluators run, CI gates enforce thresholds, nightly runs publish trends.
 
@@ -132,11 +132,11 @@
 
 ### Implementation for User Story 4
 
-- [ ] T042 [US4] Implement failure clustering in `src/backend/evaluations/analysis.py` — group `FailureRecord` entries by cluster type (intent_misroute, extraction_error, validator_rejection, poor_answer_quality, safety_violation, tool_call_failure)
-- [ ] T043 [US4] Implement `FailureCluster` summary generation in `src/backend/evaluations/analysis.py` — compute representative queries, remediation targets (mapping cluster → prompt/config file), and severity levels
-- [ ] T044 [US4] Implement delta comparison in `src/backend/evaluations/analysis.py` — compare two `RunSummary` results against the same dataset version, produce `DeltaComparison` with per-metric `MetricDelta` and regression detection
-- [ ] T045 [P] [US4] Implement analysis CLI entry point in `src/backend/evaluations/analysis.py` — supports `--run-id` for cluster report and `--compare <before> <after>` for delta report per quickstart.md
-- [ ] T046 [US4] Write unit tests for failure clustering and delta comparison with synthetic evaluation results in `tests/unit/test_eval_analysis.py`
+- [x] T042 [US4] Implement failure clustering in `src/backend/evaluations/analysis.py` — group `FailureRecord` entries by cluster type (intent_misroute, extraction_error, validator_rejection, poor_answer_quality, safety_violation, tool_call_failure)
+- [x] T043 [US4] Implement `FailureCluster` summary generation in `src/backend/evaluations/analysis.py` — compute representative queries, remediation targets (mapping cluster → prompt/config file), and severity levels
+- [x] T044 [US4] Implement delta comparison in `src/backend/evaluations/analysis.py` — compare two `RunSummary` results against the same dataset version, produce `DeltaComparison` with per-metric `MetricDelta` and regression detection
+- [x] T045 [P] [US4] Implement analysis CLI entry point in `src/backend/evaluations/analysis.py` — supports `--run-id` for cluster report and `--compare <before> <after>` for delta report per quickstart.md
+- [x] T046 [US4] Write unit tests for failure clustering and delta comparison with synthetic evaluation results in `tests/unit/test_eval_analysis.py`
 
 **Checkpoint**: Failure analysis and remediation loop are functional. Deltas are measurable and attributable.
 
@@ -150,12 +150,12 @@
 
 ### Implementation for User Story 5
 
-- [ ] T047 [US5] Implement Foundry cloud batch evaluation path in `src/backend/evaluations/runner.py` — uses `AIProjectClient` and `evaluation_agent_batch_eval_create` for full-suite cloud runs with result polling and summary download
-- [ ] T048 [US5] Implement Foundry evaluator catalog integration in `src/backend/evaluations/runner.py` — register custom prompt evaluators via `evaluator_catalog_create`, check existing evaluators via `evaluator_catalog_get` before creating new ones
-- [ ] T049 [US5] Implement run result persistence to `.foundry/results/<run-id>.json` and integration with `.foundry/agent-metadata.yaml` test cases in `src/backend/evaluations/runner.py`
-- [ ] T050 [P] [US5] Implement App Insights correlation — attach `correlation_id` to evaluation runs and emit OpenTelemetry spans linking evaluation outcomes to request flow stages in `src/backend/evaluations/runner.py` (FR-019)
-- [ ] T051 [US5] Implement nightly trace-to-dataset refresh automation in `src/backend/evaluations/harvest.py` — scheduled harvest, sanitize, version increment, and dataset update
-- [ ] T052 [US5] Write unit tests for Foundry cloud evaluation path and result persistence (mocked API calls) in `tests/unit/test_eval_runner.py`
+- [x] T047 [US5] Implement Foundry cloud batch evaluation path in `src/backend/evaluations/runner.py` — uses `AIProjectClient` and `evaluation_agent_batch_eval_create` for full-suite cloud runs with result polling and summary download
+- [x] T048 [US5] Implement Foundry evaluator catalog integration in `src/backend/evaluations/runner.py` — register custom prompt evaluators via `evaluator_catalog_create`, check existing evaluators via `evaluator_catalog_get` before creating new ones
+- [x] T049 [US5] Implement run result persistence to `.foundry/results/<run-id>.json` and integration with `.foundry/agent-metadata.yaml` test cases in `src/backend/evaluations/runner.py`
+- [x] T050 [P] [US5] Implement App Insights correlation — attach `correlation_id` to evaluation runs and emit OpenTelemetry spans linking evaluation outcomes to request flow stages in `src/backend/evaluations/runner.py` (FR-019)
+- [x] T051 [US5] Implement nightly trace-to-dataset refresh automation in `src/backend/evaluations/harvest.py` — scheduled harvest, sanitize, version increment, and dataset update
+- [x] T052 [US5] Write unit tests for Foundry cloud evaluation path and result persistence (mocked API calls) in `tests/unit/test_eval_runner.py`
 
 **Checkpoint**: Phased rollout is complete — baseline established, CI gating active, production feedback loop operational.
 
@@ -165,12 +165,12 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T053 [P] Add evaluation settings (`eval_judge_model_deployment`, `eval_default_dataset`) to `src/backend/config/settings.py` with corresponding `.env.example` entries
-- [ ] T054 [P] Update `src/backend/evaluations/__init__.py` with complete public API exports for all models, runner, analysis, and harvest functions
-- [ ] T055 Run `uv run poe check` to verify all evaluation code passes linting, type checking, and tests
-- [ ] T056 [P] Validate quickstart.md commands end-to-end against implemented CLI entry points
-- [ ] T057 Update `pyproject.toml` to include `src/backend/evaluations` in lint/typecheck/test coverage paths if not already covered
-- [ ] T058 Verify evaluation package uses lazy imports or conditional guards so existing NL2SQL runtime is unaffected when `azure-ai-evaluation` is unavailable or evaluations are disabled (FR-021)
+- [x] T053 [P] Add evaluation settings (`eval_judge_model_deployment`, `eval_default_dataset`) to `src/backend/config/settings.py` with corresponding `.env.example` entries
+- [x] T054 [P] Update `src/backend/evaluations/__init__.py` with complete public API exports for all models, runner, analysis, and harvest functions
+- [x] T055 Run `uv run poe check` to verify all evaluation code passes linting, type checking, and tests
+- [x] T056 [P] Validate quickstart.md commands end-to-end against implemented CLI entry points
+- [x] T057 Update `pyproject.toml` to include `src/backend/evaluations` in lint/typecheck/test coverage paths if not already covered
+- [x] T058 Verify evaluation package uses lazy imports or conditional guards so existing NL2SQL runtime is unaffected when `azure-ai-evaluation` is unavailable or evaluations are disabled (FR-021)
 
 ---
 

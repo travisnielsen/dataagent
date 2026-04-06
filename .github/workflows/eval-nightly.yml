@@ -1,0 +1,69 @@
+name: Nightly Evaluation
+
+on:
+    schedule:
+        - cron: "0 6 * * *" # Daily at 6am UTC
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    issues: write
+
+jobs:
+    eval-nightly:
+        runs-on: ubuntu-latest
+        timeout-minutes: 90
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v4
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.11
+
+            - name: Install dependencies
+              run: uv sync --all-extras --dev
+
+            - name: Run full evaluation suite
+              env:
+                  AZURE_AI_PROJECT_ENDPOINT: ${{ secrets.AZURE_AI_PROJECT_ENDPOINT }}
+                  AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
+                  APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
+              run: |
+                  uv run python -m evaluations \
+                    --dataset src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl \
+                    --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy,indirect_attack,sql_safety,param_extraction_correctness,answer_adequacy,clarification_quality \
+                    --trigger nightly
+
+            - name: Check for regressions and open issue
+              if: failure()
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const resultPath = '.foundry/results/latest-summary.json';
+                      let body = '## Nightly Evaluation Regression\n\n';
+                      body += `**Run date**: ${new Date().toISOString()}\n`;
+                      body += `**Branch**: ${process.env.GITHUB_REF}\n`;
+                      body += `**Commit**: ${process.env.GITHUB_SHA}\n\n`;
+                      if (fs.existsSync(resultPath)) {
+                        const summary = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+                        const failing = (summary.metrics || []).filter(m => m.passed === false);
+                        body += '### Failing Metrics\n\n';
+                        for (const m of failing) {
+                          body += `- **${m.metric}**: ${m.mean_score.toFixed(3)} (threshold: ${m.threshold})\n`;
+                        }
+                      } else {
+                        body += 'Evaluation run failed — no summary generated.\n';
+                      }
+                      await github.rest.issues.create({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        title: `[Eval] Nightly regression detected — ${new Date().toISOString().split('T')[0]}`,
+                        body: body,
+                        labels: ['evaluation', 'regression']
+                      });
