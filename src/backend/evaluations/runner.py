@@ -133,9 +133,7 @@ def generate_metadata(
 
 def _aggregate_metric(name: str, scores: list[float], threshold: float | None) -> MetricResult:
     """Build a MetricResult from raw scores."""
-    pass_count = (
-        sum(1 for s in scores if s >= threshold) if threshold is not None else len(scores)
-    )
+    pass_count = sum(1 for s in scores if s >= threshold) if threshold is not None else len(scores)
     passed = pass_count == len(scores) if threshold is not None else None
     sorted_scores = sorted(scores)
     p5_idx = max(0, int(len(sorted_scores) * 0.05) - 1)
