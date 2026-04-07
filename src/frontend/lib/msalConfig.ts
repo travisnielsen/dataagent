@@ -1,27 +1,39 @@
 import { Configuration, LogLevel } from "@azure/msal-browser";
 
 const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || "YOUR_CLIENT_ID";
-const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || "common";
+const configuredTenantIds = [
+  ...new Set(
+    (process.env.NEXT_PUBLIC_AZURE_AD_TENANT_IDS ||
+      process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID ||
+      "")
+      .split(",")
+      .map((tenantId) => tenantId.trim())
+      .filter(Boolean),
+  ),
+];
+const authorityTenant =
+  configuredTenantIds.length > 1 ? "organizations" : configuredTenantIds[0] || "common";
 const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
 // Use a dedicated static page for hidden iframe token renewal.
 // This avoids CSP/frame header conflicts on the main app shell.
-export const silentRedirectUri = `${origin}/auth/silent/`;
+export const silentRedirectUri = `${origin}/auth/silent`;
 
 /**
  * MSAL Configuration
  *
- * To configure this for your Azure AD tenant:
+ * To configure this for your Azure AD tenant(s):
  * 1. Register an app in Azure AD (Portal > App registrations > New registration)
  * 2. Set the redirect URI to http://localhost:3000 (for development)
- * 3. Copy the Application (client) ID and Directory (tenant) ID
+ * 3. Copy the Application (client) ID and approved Directory (tenant) ID values
  * 4. Replace the values below or set environment variables
  */
 
 export const msalConfig: Configuration = {
   auth: {
     clientId,
-    authority: `https://login.microsoftonline.com/${tenantId}`,
+    // Use the multi-tenant organizations authority when more than one tenant is approved.
+    authority: `https://login.microsoftonline.com/${authorityTenant}`,
     redirectUri: origin,
     postLogoutRedirectUri: origin,
   },
