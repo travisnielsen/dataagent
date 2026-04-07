@@ -35,6 +35,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Build and push image using ACR Tasks
+        timeout-minutes: 20
         shell: bash
         run: |
           set -euo pipefail
