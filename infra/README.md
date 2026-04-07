@@ -203,7 +203,7 @@ Install backend dependencies:
 Create an `.env` file inside `src/backend/`. Copy the contents of [.env.example](../src/backend/.env.example) into `.env` and update the values to match your environment.
 
 > [!IMPORTANT]
-> The Entra ID section is optional. When these environment variables are set, the API will require a valid token issued by the source tenant with the correct target scope. If you don't require user-level authorization to the API, you can omit these.
+> The Entra ID section is optional. When these environment variables are set, the API will require a valid token issued by one of the approved source tenants with the correct target scope. If you don't require user-level authorization to the API, you can omit these.
 
 ### Environment Variables - Frontend
 
@@ -211,7 +211,7 @@ Create a `.env.local` file within `src/frontend/`. Use [.env.example](../src/fro
 
 ```env
 NEXT_PUBLIC_AZURE_AD_CLIENT_ID=your-client-id-here
-NEXT_PUBLIC_AZURE_AD_TENANT_ID=your-tenant-id-here
+NEXT_PUBLIC_AZURE_AD_TENANT_IDS=tenant-id-1,tenant-id-2
 ```
 
 ### Start Development Server
@@ -309,7 +309,7 @@ Next, navigate to your repository's **Settings → Secrets and variables → Act
 | `AZURE_RESOURCE_GROUP` | Resource group name containing the Container App |
 | `NEXT_PUBLIC_API_URL` | Backend API URL (e.g., `https://[your_instance].eastus2.azurecontainerapps.io`) |
 | `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` | Frontend app registration client ID for authentication |
-| `NEXT_PUBLIC_AZURE_AD_TENANT_ID` | Azure AD tenant ID for authentication |
+| `NEXT_PUBLIC_AZURE_AD_TENANT_IDS` | Comma-separated Azure AD tenant IDs approved for authentication |
 
 ### Workflow Trigger
 

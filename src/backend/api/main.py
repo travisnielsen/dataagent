@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import uvicorn
-from api.middleware import AzureADAuthMiddleware, azure_ad_settings, azure_scheme
+from api.middleware import AzureADAuthMiddleware, azure_ad_settings
 from api.monitoring import configure_observability, is_observability_enabled
 from api.routers import chat_router, conversations_router
 from dotenv import load_dotenv
@@ -44,7 +44,7 @@ logging.getLogger("agent_framework").setLevel(logging.WARNING)
 logging.getLogger("agent_framework.azure").setLevel(logging.ERROR)
 
 # Check if Azure AD authentication is configured
-AUTH_ENABLED = bool(azure_ad_settings.AZURE_AD_CLIENT_ID and azure_ad_settings.AZURE_AD_TENANT_ID)
+AUTH_ENABLED = azure_ad_settings.auth_enabled
 
 # Explicit opt-in for anonymous access (development only)
 ALLOW_ANONYMOUS = os.getenv("ALLOW_ANONYMOUS", "").lower() in {"true", "1", "yes"}
@@ -78,7 +78,8 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "detail": "Authentication is not configured. "
-                "Set AZURE_AD_CLIENT_ID and AZURE_AD_TENANT_ID, "
+                "Set AZURE_AD_CLIENT_ID and AZURE_AD_TENANT_IDS, "
+                "or the legacy AZURE_AD_TENANT_ID, "
                 "or set ALLOW_ANONYMOUS=true for development."
             },
         )
@@ -111,8 +112,10 @@ async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
     # Log authentication status
     if AUTH_ENABLED:
         logger.info("Azure AD authentication is ENABLED")
-        if azure_scheme:
-            await azure_scheme.openid_config.load_config()
+        logger.info(
+            "Azure AD tenant allowlist: %s",
+            azure_ad_settings.allowed_tenant_ids,
+        )
     elif ALLOW_ANONYMOUS:
         logger.warning("=" * 60)
         logger.warning("WARNING: Running with ALLOW_ANONYMOUS=true")

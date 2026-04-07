@@ -5,6 +5,9 @@ import { useIsAuthenticated, useMsal } from "@azure/msal-react";
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest, silentRedirectUri } from "./msalConfig";
 
+const loginRedirectUri =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+
 /**
  * Hook to acquire an access token for the backend API.
  * Returns the access token, loading state, and error if any.
@@ -38,24 +41,21 @@ export function useAccessToken() {
       setAccessToken(response.accessToken);
       return response.accessToken;
     } catch (silentError) {
-      console.warn("Silent token acquisition failed, trying interactive fallback:", silentError);
+      console.warn("Silent token acquisition failed, trying redirect fallback:", silentError);
 
-      try {
-        const response = await instance.acquireTokenPopup(apiRequest);
-        console.log("Token acquired via popup fallback");
-        setAccessToken(response.accessToken);
-        return response.accessToken;
-      } catch (interactiveError) {
-        // Preserve the original interaction-required error when available.
-        const finalError =
-          silentError instanceof InteractionRequiredAuthError
-            ? silentError
-            : (interactiveError as Error);
-        console.error("Interactive token acquisition failed:", interactiveError);
-        setError(finalError);
-        setAccessToken(null);
+      if (silentError instanceof InteractionRequiredAuthError) {
+        await instance.acquireTokenRedirect({
+          ...apiRequest,
+          account: accounts[0],
+          redirectUri: loginRedirectUri,
+          redirectStartPage: window.location.href,
+        });
         return null;
       }
+
+      setError(silentError as Error);
+      setAccessToken(null);
+      return null;
     } finally {
       setIsLoading(false);
     }

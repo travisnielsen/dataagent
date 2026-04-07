@@ -1,7 +1,10 @@
 "use client";
 
-import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest } from "@/lib/msalConfig";
+import { useIsAuthenticated, useMsal } from "@azure/msal-react";
+
+const appOrigin =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
 export function AuthButton() {
   const { instance, accounts } = useMsal();
@@ -9,7 +12,11 @@ export function AuthButton() {
 
   const handleSignIn = async () => {
     try {
-      await instance.loginPopup(loginRequest);
+      await instance.loginRedirect({
+        ...loginRequest,
+        redirectUri: appOrigin,
+        redirectStartPage: window.location.href,
+      });
     } catch (error) {
       console.error("Login failed:", error);
     }
@@ -17,9 +24,8 @@ export function AuthButton() {
 
   const handleSignOut = async () => {
     try {
-      await instance.logoutPopup({
-        postLogoutRedirectUri: window.location.origin,
-        mainWindowRedirectUri: window.location.origin,
+      await instance.logoutRedirect({
+        postLogoutRedirectUri: appOrigin,
       });
     } catch (error) {
       console.error("Logout failed:", error);
