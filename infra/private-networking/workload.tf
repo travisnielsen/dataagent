@@ -5,6 +5,10 @@
 locals {
   github_federated_principal_object_id = var.github_federated_principal_object_id == null ? "" : trimspace(var.github_federated_principal_object_id)
   github_federated_principal_client_id = var.github_federated_principal_client_id == null ? "" : trimspace(var.github_federated_principal_client_id)
+  azure_ad_allowed_tenant_ids = distinct(compact(concat(
+    var.azure_ad_allowed_tenant_ids,
+    [data.azurerm_client_config.current.tenant_id]
+  )))
 
   # RBAC requires a service principal object ID. Prefer resolving from client ID when provided.
   github_federated_rbac_principal_object_id = local.github_federated_principal_client_id != "" ? data.azuread_service_principal.github_federated[0].object_id : local.github_federated_principal_object_id
@@ -194,7 +198,7 @@ resource "azurerm_container_registry_agent_pool" "acr_tasks" {
   resource_group_name       = azurerm_resource_group.private_rg.name
   location                  = azurerm_resource_group.private_rg.location
   tier                      = "S2"
-  instance_count            = 1
+  instance_count            = 2
   virtual_network_subnet_id = azurerm_subnet.application.id
   tags                      = local.tags
 
@@ -937,7 +941,11 @@ resource "azurerm_container_app" "api" {
       }
       env {
         name  = "AZURE_AD_TENANT_ID"
-        value = data.azurerm_client_config.current.tenant_id
+        value = local.azure_ad_allowed_tenant_ids[0]
+      }
+      env {
+        name  = "AZURE_AD_TENANT_IDS"
+        value = join(",", local.azure_ad_allowed_tenant_ids)
       }
       env {
         name  = "AZURE_AD_CLIENT_ID"

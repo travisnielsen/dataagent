@@ -26,6 +26,12 @@ variable "frontend_app_client_id" {
   description = "Azure AD App Registration client ID for frontend authentication."
 }
 
+variable "azure_ad_allowed_tenant_ids" {
+  type        = list(string)
+  default     = []
+  description = "Optional additional Azure AD tenant IDs allowed to authenticate to the API. The deployment tenant is always included automatically."
+}
+
 variable "github_federated_principal_object_id" {
   type        = string
   default     = null
