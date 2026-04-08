@@ -9,6 +9,10 @@ data "http" "deployer_ip" {
 
 locals {
   deployer_ip = chomp(data.http.deployer_ip.response_body)
+  azure_ad_allowed_tenant_ids = distinct(compact(concat(
+    var.azure_ad_allowed_tenant_ids,
+    [data.azurerm_client_config.current.tenant_id]
+  )))
 }
 
 
@@ -945,7 +949,11 @@ resource "azurerm_container_app" "api" {
       }
       env {
         name  = "AZURE_AD_TENANT_ID"
-        value = data.azurerm_client_config.current.tenant_id
+        value = local.azure_ad_allowed_tenant_ids[0]
+      }
+      env {
+        name  = "AZURE_AD_TENANT_IDS"
+        value = join(",", local.azure_ad_allowed_tenant_ids)
       }
       env {
         name  = "AZURE_AD_CLIENT_ID"
