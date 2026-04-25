@@ -10,6 +10,7 @@ on:
 
 env:
   NODE_VERSION: "20"
+  ACR_BUILD_MODE: ${{ vars['ACR_BUILD_MODE'] || 'public' }}
   AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
   AZURE_STATIC_WEB_APP_NAME: ${{ vars.AZURE_STATIC_WEB_APP_NAME }}
 
@@ -19,11 +20,28 @@ permissions:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, linux, x64, cadence-private]
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate ACR mode setting
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MODE="${{ env.ACR_BUILD_MODE }}"
+          if [ -z "$MODE" ]; then
+            MODE="public"
+          fi
+
+          if [ "$MODE" != "public" ] && [ "$MODE" != "private" ]; then
+            echo "ACR_BUILD_MODE must be 'public' or 'private' (received: $MODE)"
+            exit 1
+          fi
+
+          echo "Frontend deployment detected ACR build mode: $MODE"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4

@@ -3,6 +3,8 @@
 #################################################################################
 
 locals {
+  acr_is_private = var.acr_build_mode == "private"
+
   github_federated_principal_object_id = var.github_federated_principal_object_id == null ? "" : trimspace(var.github_federated_principal_object_id)
   github_federated_principal_client_id = var.github_federated_principal_client_id == null ? "" : trimspace(var.github_federated_principal_client_id)
   azure_ad_allowed_tenant_ids = distinct(compact(concat(
@@ -170,7 +172,7 @@ module "container_registry" {
   location                      = azurerm_resource_group.private_rg.location
   sku                           = "Premium"
   zone_redundancy_enabled       = false
-  public_network_access_enabled = true
+  public_network_access_enabled = !local.acr_is_private
   network_rule_bypass_option    = "AzureServices"
   admin_enabled                 = false
   tags                          = local.tags
@@ -193,6 +195,8 @@ module "container_registry" {
 }
 
 resource "azurerm_container_registry_agent_pool" "acr_tasks" {
+  count = local.acr_is_private ? 1 : 0
+
   name                      = "${local.identifier}pool"
   container_registry_name   = element(reverse(split("/", module.container_registry.resource_id)), 0)
   resource_group_name       = azurerm_resource_group.private_rg.name
