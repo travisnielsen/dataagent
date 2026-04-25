@@ -10,6 +10,7 @@ on:
 
 env:
   REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+  ACR_BUILD_MODE: ${{ vars['ACR_BUILD_MODE'] || 'public' }}
   ACR_AGENT_POOL: ${{ vars.AZURE_ACR_AGENT_POOL }}
   IMAGE_NAME: cadence-api
   CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
@@ -21,7 +22,7 @@ permissions:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, linux, x64, cadence-private]
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
 
     steps:
       - name: Checkout code
@@ -34,16 +35,48 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push image using ACR Tasks
+      - name: Validate ACR build mode prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MODE="${{ env.ACR_BUILD_MODE }}"
+          if [ -z "$MODE" ]; then
+            MODE="public"
+          fi
+
+          if [ "$MODE" != "public" ] && [ "$MODE" != "private" ]; then
+            echo "ACR_BUILD_MODE must be 'public' or 'private' (received: $MODE)"
+            exit 1
+          fi
+
+          if [ "$MODE" = "private" ] && [ -z "${{ env.ACR_AGENT_POOL }}" ]; then
+            echo "ACR_BUILD_MODE=private requires AZURE_ACR_AGENT_POOL"
+            exit 1
+          fi
+
+          echo "ACR build mode: $MODE"
+
+      - name: Build and push image using public ACR Tasks
+        if: env.ACR_BUILD_MODE != 'private'
         timeout-minutes: 20
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -z "${{ env.ACR_AGENT_POOL }}" ]; then
-            echo "AZURE_ACR_AGENT_POOL is required"
-            exit 1
-          fi
+          az acr build \
+            --registry "${{ env.REGISTRY }}" \
+            --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            --image "${{ env.IMAGE_NAME }}:latest" \
+            --file ./src/backend/Dockerfile \
+            .
+
+      - name: Build and push image using private ACR agent pool
+        if: env.ACR_BUILD_MODE == 'private'
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
 
           az acr build \
             --registry "${{ env.REGISTRY }}" \

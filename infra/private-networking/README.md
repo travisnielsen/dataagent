@@ -36,7 +36,23 @@ Commonly customized values:
 - `region`, `region_aifoundry`, `region_search`
 - `resource_group_name` (optional override)
 - subnet CIDR variables (`*_subnet_cidr`)
+- `acr_build_mode` (`public` default for cost optimization, `private` for network-isolated ACR builds)
 - `tags`
+
+### ACR Build Mode
+
+`acr_build_mode` controls both ACR network exposure and ACR Tasks execution path:
+
+- `public` (default):
+  - ACR public network access is enabled
+  - Private ACR agent pool is removed
+  - New image builds use Azure-hosted ACR Tasks
+- `private`:
+  - ACR public network access is blocked
+  - Private ACR agent pool is created/maintained
+  - New image builds use `az acr build --agent-pool <pool>`
+
+Use `public` unless you explicitly require private-network build execution.
 
 For GitHub Actions OIDC/federated access (recommended for private runner and standard CI/CD):
 
@@ -291,6 +307,8 @@ Suggested mapping:
 - `AZURE_RESOURCE_GROUP` <- output `resource_group_name`
 - `AZURE_LOCATION` <- output `azure_location`
 - `AZURE_CONTAINER_REGISTRY` <- output `container_registry_name`
+- `ACR_BUILD_MODE` <- output `acr_build_mode`
+- `AZURE_ACR_AGENT_POOL` <- output `acr_agent_pool_name` (private mode only)
 - `AZURE_CONTAINER_APP_ENVIRONMENT` <- output `container_app_environment_name`
 - `AZURE_CONTAINER_APP_NAME` <- output `container_app_name`
 - `NEXT_PUBLIC_API_URL` <- output `container_app_url`
@@ -313,6 +331,7 @@ bash ./infra/scripts/print-github-vars-from-terraform.sh
 ```
 
 This prints `KEY=value` lines for repository variables sourced from Terraform outputs, plus placeholders for values that must be set manually.
+In `public` mode, it reports `AZURE_ACR_AGENT_POOL` as not required.
 
 To update repository variables directly via `gh` CLI (safe dry-run by default):
 
@@ -325,6 +344,8 @@ Apply changes to the current repository:
 ```bash
 bash ./infra/scripts/update-github-vars-from-terraform.sh --apply
 ```
+
+In `public` mode, this script removes `AZURE_ACR_AGENT_POOL` from repository variables to prevent stale private-mode configuration.
 
 Apply changes to a specific repository:
 

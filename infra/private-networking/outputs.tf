@@ -113,8 +113,13 @@ output "container_registry_name" {
 }
 
 output "acr_agent_pool_name" {
-  description = "Container Registry agent pool name for private ACR Tasks builds"
-  value       = azurerm_container_registry_agent_pool.acr_tasks.name
+  description = "Container Registry agent pool name for private ACR Tasks builds; null in public mode"
+  value       = local.acr_is_private ? azurerm_container_registry_agent_pool.acr_tasks[0].name : null
+}
+
+output "acr_build_mode" {
+  description = "Configured ACR build mode (public or private)."
+  value       = var.acr_build_mode
 }
 
 output "container_app_environment_name" {

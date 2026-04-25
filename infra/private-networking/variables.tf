@@ -177,3 +177,14 @@ variable "tags" {
   default     = {}
   description = "Optional tags merged with module defaults."
 }
+
+variable "acr_build_mode" {
+  type        = string
+  default     = "public"
+  description = "ACR build execution mode: public uses Azure-hosted ACR Tasks; private uses the private ACR agent pool."
+
+  validation {
+    condition     = contains(["public", "private"], var.acr_build_mode)
+    error_message = "acr_build_mode must be either 'public' or 'private'."
+  }
+}

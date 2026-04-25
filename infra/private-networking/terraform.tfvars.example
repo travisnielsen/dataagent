@@ -33,6 +33,11 @@ bastion_subnet_cidr             = "10.40.6.0/26"
 utility_vm_admin_password        = "<replace-with-strong-password>"
 utility_vm_size                  = "Standard_D4s_v3"
 
+# ACR build mode controls where new container images are built:
+# - "public" (default): uses Azure-hosted ACR Tasks and removes private ACR agent pool.
+# - "private": keeps builds on private ACR agent pool and blocks public ACR access.
+acr_build_mode = "public"
+
 sql_database_name               = "WideWorldImportersStd"
 enable_local_exec_provisioning = false
 

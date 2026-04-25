@@ -75,10 +75,26 @@ echo "# GitHub repository variables from Terraform outputs"
 echo "# Source: infra/private-networking"
 echo
 
+acr_mode="$(read_output "acr_build_mode")"
+acr_pool="$(read_output "acr_agent_pool_name")"
+
+if [[ -z "$acr_mode" ]]; then
+  if [[ -n "$acr_pool" ]]; then
+    acr_mode="private"
+  else
+    acr_mode="public"
+  fi
+fi
+
 print_assignment "AZURE_RESOURCE_GROUP" "resource_group_name"
 print_assignment "AZURE_LOCATION" "azure_location"
 print_assignment "AZURE_CONTAINER_REGISTRY" "container_registry_name"
-print_assignment "AZURE_ACR_AGENT_POOL" "acr_agent_pool_name"
+printf 'ACR_BUILD_MODE=%s\n' "$acr_mode"
+if [[ "$acr_mode" == "private" ]]; then
+  print_assignment "AZURE_ACR_AGENT_POOL" "acr_agent_pool_name"
+else
+  echo "AZURE_ACR_AGENT_POOL=<not required in public mode>"
+fi
 print_assignment "AZURE_CONTAINER_APP_ENVIRONMENT" "container_app_environment_name"
 print_assignment "AZURE_CONTAINER_APP_NAME" "container_app_name"
 print_assignment "NEXT_PUBLIC_API_URL" "container_app_url"

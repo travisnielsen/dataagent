@@ -130,6 +130,20 @@ set_repo_var() {
   fi
 }
 
+clear_repo_var() {
+  local name="$1"
+
+  if [[ "$APPLY_MODE" == true ]]; then
+    if gh variable delete "$name" --repo "$REPO" >/dev/null 2>&1; then
+      echo "DELETED $name"
+    else
+      echo "SKIP $name (not found)"
+    fi
+  else
+    echo "DRY-RUN DELETE $name"
+  fi
+}
+
 map_and_set() {
   local var_name="$1"
   local output_name="$2"
@@ -151,11 +165,27 @@ else
   echo "Mode: DRY-RUN (use --apply to write variables)"
 fi
 
+  acr_mode="$(read_output "acr_build_mode")"
+  acr_pool="$(read_output "acr_agent_pool_name")"
+
+  if [[ -z "$acr_mode" ]]; then
+    if [[ -n "$acr_pool" ]]; then
+      acr_mode="private"
+    else
+      acr_mode="public"
+    fi
+  fi
+
 echo
 map_and_set "AZURE_RESOURCE_GROUP" "resource_group_name"
 map_and_set "AZURE_LOCATION" "azure_location"
 map_and_set "AZURE_CONTAINER_REGISTRY" "container_registry_name"
-map_and_set "AZURE_ACR_AGENT_POOL" "acr_agent_pool_name"
+  set_repo_var "ACR_BUILD_MODE" "$acr_mode"
+  if [[ "$acr_mode" == "private" ]]; then
+    map_and_set "AZURE_ACR_AGENT_POOL" "acr_agent_pool_name"
+  else
+    clear_repo_var "AZURE_ACR_AGENT_POOL"
+  fi
 map_and_set "AZURE_CONTAINER_APP_ENVIRONMENT" "container_app_environment_name"
 map_and_set "AZURE_CONTAINER_APP_NAME" "container_app_name"
 map_and_set "NEXT_PUBLIC_API_URL" "container_app_url"
