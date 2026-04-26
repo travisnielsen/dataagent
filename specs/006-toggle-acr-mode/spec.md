@@ -3,7 +3,7 @@
 **Feature Branch**: `006-toggle-acr-mode`
 **Created**: 2026-04-25
 **Status**: Draft
-**Input**: User description: "Create a new feature that supports toggling Azure Container Registry between public and private mode for private-networking deployments, including ACR agent pool deletion when public, public network access enablement, CI workflow mode switching, and documentation/tfvars example updates."
+**Input**: User description: "Create a new feature that supports toggling Azure Container Registry between public and private mode for deployments managed in infra/terraform, including ACR agent pool deletion when public, public network access enablement, CI workflow mode switching, and documentation/tfvars example updates."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -22,7 +22,7 @@
 
 ### User Story 1 - Toggle ACR Build Execution Path (Priority: P1)
 
-As an infrastructure operator, I can set ACR mode to either public or private in the private-networking deployment so I can control where container images are built—via a private build agent pool or the public Azure-hosted ACR build task—enabling cost optimization when network isolation is not required.
+As an infrastructure operator, I can set ACR mode to either public or private in the Terraform deployment under `infra/terraform/` so I can control where container images are built—via a private build agent pool or the public Azure-hosted ACR build task—enabling cost optimization when network isolation is not required.
 
 **Why this priority**: This is the core requested capability and directly controls container image build execution and operational costs.
 
@@ -30,8 +30,8 @@ As an infrastructure operator, I can set ACR mode to either public or private in
 
 **Acceptance Scenarios**:
 
-1. **Given** a private-networking deployment configured for private mode, **When** infrastructure is applied, **Then** container images can be built via the private ACR build agent pool, and ACR disallows public network access.
-2. **Given** a private-networking deployment configured for public mode, **When** infrastructure is applied, **Then** container images can be built via the public Azure-hosted ACR build task, and ACR allows public network access with no private build agent pool present.
+1. **Given** a Terraform deployment under `infra/terraform/` configured for private mode, **When** infrastructure is applied, **Then** container images can be built via the private ACR build agent pool, and ACR disallows public network access.
+2. **Given** a Terraform deployment under `infra/terraform/` configured for public mode, **When** infrastructure is applied, **Then** container images can be built via the public Azure-hosted ACR build task, and ACR allows public network access with no private build agent pool present.
 3. **Given** an existing private-mode deployment with a private build agent pool, **When** mode is changed to public and infrastructure is applied, **Then** the private build agent pool is removed, and subsequent container image builds can only use the public ACR build task.
 
 ---
@@ -86,7 +86,7 @@ As a platform maintainer, I can use updated infrastructure and deployment docume
 
 ### Functional Requirements
 
-- **FR-001**: The private-networking deployment configuration MUST expose a single ACR mode setting with allowed values of public or private, defaulting to public to optimize for cost-efficiency.
+- **FR-001**: The deployment configuration in `infra/terraform/` MUST expose a single ACR mode setting with allowed values of public or private, defaulting to public to optimize for cost-efficiency.
 - **FR-002**: When ACR mode is private, deployment MUST configure ACR to block public network access.
 - **FR-003**: When ACR mode is private, deployment MUST create and maintain the private ACR build agent pool.
 - **FR-004**: When ACR mode is public, deployment MUST configure ACR to allow public network access.
@@ -95,9 +95,9 @@ As a platform maintainer, I can use updated infrastructure and deployment docume
 - **FR-007**: API and frontend continuous deployment workflows MUST select build execution behavior based on the configured ACR mode.
 - **FR-008**: API and frontend continuous deployment workflows MUST fail with a clear actionable message when mode-specific build prerequisites are missing.
 - **FR-009**: Documentation MUST describe ACR mode behavior, operator decision guidance for each mode, and required configuration points.
-- **FR-010**: The example infrastructure variable file for private-networking MUST include ACR mode configuration examples and explanatory comments.
-- **FR-011**: The feature scope MUST apply only to deployments using private-networking.
-- **FR-012**: The feature MUST not require any dependency on the public-networking deployment path.
+- **FR-010**: The example infrastructure variable file for `infra/terraform/` MUST include ACR mode configuration examples and explanatory comments.
+- **FR-011**: The feature scope MUST apply only to deployments using `infra/terraform/`.
+- **FR-012**: The feature MUST not require any dependency on legacy alternate-topology artifacts.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -119,8 +119,8 @@ As a platform maintainer, I can use updated infrastructure and deployment docume
 ## Assumptions
 
 - Cost optimization is the primary driver: the private ACR build pool is expensive, and enabling a public mode default allows operators to reduce costs when network isolation is not required.
-- Private-networking is the only supported deployment topology for this feature.
+- `infra/terraform/` is the only supported deployment topology for this feature.
 - Existing private-mode behavior is treated as the baseline and must remain functionally unchanged when mode is private.
 - Workflow mode selection can be driven by repository-level configuration without introducing additional manual steps per run.
 - Operators have permissions required to create, update, and delete ACR-related resources in the target environment.
-- Public-networking artifacts may be removed in the future and are intentionally excluded from this feature scope.
+- Legacy alternate-topology artifacts may be removed in the future and are intentionally excluded from this feature scope.

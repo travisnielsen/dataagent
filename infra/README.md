@@ -46,7 +46,7 @@ The Terraform deployment automatically configures AI Search with vector indexes 
 | **Skillsets** | `table-embed-skill`, `query-template-embed-skill` | Generate embeddings via `text-embedding-3-large` model |
 | **Indexers** | `indexer-tables`, `indexer-query-templates` | Process JSON documents and populate vector indexes |
 
-The Search service uses managed identity authentication to access storage and AI Foundry for embedding generation. Sample data is uploaded from the `search-config/` folder during deployment.
+The Search service uses managed identity authentication to access storage and AI Foundry for embedding generation. Sample data is uploaded from the `infra/search-config/` folder during deployment.
 
 ### Deploy Infrastructure
 
@@ -88,7 +88,7 @@ private DNS zones, and optional private endpoints to existing Azure resources.
 From the repo root:
 
 ```bash
-cd infra/private-networking
+cd infra/terraform
 
 # Create local variables file from starter template (or edit directly)
 cp terraform.tfvars.example terraform.tfvars
@@ -106,7 +106,7 @@ terraform plan
 terraform apply
 ```
 
-At minimum, set these values in `infra/private-networking/terraform.tfvars`:
+At minimum, set these values in `infra/terraform/terraform.tfvars`:
 
 ```terraform
 subscription_id          = "<your_subscription_id>"
@@ -117,8 +117,8 @@ frontend_app_client_id   = "<client_id_of_app_registration>"
 enable_local_exec_provisioning = false
 ```
 
-Starter values are available in `infra/private-networking/terraform.tfvars` and
-`infra/private-networking/terraform.tfvars.example`. The `terraform.tfvars` file
+Starter values are available in `infra/terraform/terraform.tfvars` and
+`infra/terraform/terraform.tfvars.example`. The `terraform.tfvars` file
 is intentionally ignored by git for environment-specific and potentially sensitive values.
 
 > **Note:** `private_endpoints` are optional. You can deploy only network and DNS
@@ -126,7 +126,7 @@ is intentionally ignored by git for environment-specific and potentially sensiti
 
 For private data-plane seeding and hardened GitHub runner authentication prerequisites
 (GitHub App recommended, PAT fallback), see
-`infra/private-networking/README.md` under "Phase 2: Private Runner Provisioning Model".
+`infra/terraform/README.md` under "Phase 2: Private Runner Provisioning Model".
 That Phase 2 flow now includes private AI Search data-plane configuration in addition
 to storage uploads and SQL import.
 
@@ -138,8 +138,8 @@ After deploying infrastructure, import the Wide World Importers sample data into
 cd scripts
 
 # Get the SQL server name and resource group from Terraform
-$SqlServer = (cd ../infra/public-networking && terraform output -raw sql_server_name)
-$RG = (cd ../infra/public-networking && terraform output -raw resource_group_name)
+$SqlServer = (cd ../infra/terraform && terraform output -raw sql_server_name)
+$RG = (cd ../infra/terraform && terraform output -raw resource_group_name)
 
 # Import sample data (5-10 minutes)
 ./import-wideworldimporters.ps1 -SqlServerName $SqlServer -ResourceGroup $RG
@@ -163,8 +163,8 @@ Run the setup script (PowerShell):
 cd scripts
 
 # Get the values from Terraform state
-$SqlServer = (cd infra/public-networking && terraform state show module.sql_server.azurerm_mssql_server.this | Select-String '^\s*name\s*=' | ForEach-Object { $_ -replace '.*"(.+)".*', '$1' })
-$IdentityName = (cd infra/public-networking && terraform state show azurerm_user_assigned_identity.api_identity | Select-String '^\s*name\s*=' | ForEach-Object { $_ -replace '.*"(.+)".*', '$1' })
+$SqlServer = (cd ../infra/terraform && terraform output -raw sql_server_name)
+$IdentityName = (cd ../infra/terraform && terraform output -raw container_app_identity_name)
 
 # Run the PowerShell script
 ./setup-sql-user.ps1 -SqlServerName $SqlServer -DatabaseName "WideWorldImportersStd" -IdentityName $IdentityName
@@ -374,7 +374,7 @@ Follow these steps to build and push the container image to Azure.
 1. **Get the ACR name from Terraform:**
 
 ```bash
-cd infra/public-networking
+cd infra/terraform
 terraform output container_registry_login_server
 ```
 

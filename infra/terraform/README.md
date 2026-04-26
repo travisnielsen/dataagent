@@ -1,6 +1,6 @@
 # Private Networking Terraform
 
-This stack creates a private networking foundation plus private service deployment for Cadence in Azure under `infra/private-networking`.
+This stack creates a private networking foundation plus private service deployment for Cadence under `infra/terraform`.
 
 ## What It Deploys
 
@@ -77,7 +77,7 @@ bash ./infra/scripts/ensure-sql-admin-group.sh
 ```
 
 The script is idempotent and prints the exact values to set in
-`infra/private-networking/terraform.tfvars`:
+`infra/terraform/terraform.tfvars`:
 
 - `sql_azuread_admin_object_id`
 - `sql_azuread_admin_login_username`
@@ -290,7 +290,7 @@ The workflow prints the selected mode and emits a warning when PAT fallback is u
 ## Commands
 
 ```bash
-cd infra/private-networking
+cd infra/terraform
 terraform init
 terraform fmt -recursive
 terraform validate
@@ -356,7 +356,7 @@ bash ./infra/scripts/update-github-vars-from-terraform.sh --repo <owner>/<repo> 
 Prerequisites:
 
 - `gh auth login` has been completed.
-- Terraform is initialized in `infra/private-networking` (`terraform init`).
+- Terraform is initialized in `infra/terraform` (`terraform init`).
 - Manual variables remain required: `AZURE_CLIENT_ID`, `GH_RUNNER_APP_ID`, and `GH_RUNNER_INSTALLATION_ID`.
 
 ### Non-Interactive Init for GitHub Runner / CI
@@ -364,7 +364,7 @@ Prerequisites:
 Use the helper script to avoid interactive prompts when running on a private runner:
 
 ```bash
-cd infra/private-networking
+cd infra/terraform
 TF_STATE_STORAGE_ACCOUNT=<your_tf_state_storage_account> ./init-remote-state.sh
 ```
 
@@ -377,7 +377,7 @@ You can also pass the state account as an argument and include extra init flags:
 For GitHub Actions, add a repo variable like `TF_STATE_STORAGE_ACCOUNT` and run:
 
 ```bash
-terraform -chdir=infra/private-networking init -reconfigure \
+terraform -chdir=infra/terraform init -reconfigure \
   -backend-config="resource_group_name=rg-terraform-state" \
   -backend-config="storage_account_name=${TF_STATE_STORAGE_ACCOUNT}" \
   -backend-config="container_name=tfstate" \

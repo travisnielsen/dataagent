@@ -27,7 +27,7 @@ variable "acr_build_mode" {
 - **Type**: `string` (enum-like via validation rule)
 - **Default**: `"public"` (cost optimization, minimal operational overhead)
 - **Allowed Values**: `public` | `private`
-- **Scope**: `infra/private-networking/` only; not used in public-networking
+- **Scope**: `infra/terraform/` only; not used in legacy alternate-topology artifacts
 - **Validation**: Hard constraint; invalid values are rejected during `terraform validate`
 
 ---
@@ -173,13 +173,13 @@ output "acr_endpoint" {
 
 ## Implementation Checklist (Phase 2)
 
-- [ ] Add `acr_build_mode` variable to `infra/private-networking/variables.tf` with validation
+- [ ] Add `acr_build_mode` variable to `infra/terraform/variables.tf` with validation
 - [ ] Add `local.acr_is_private` derived local
 - [ ] Update ACR module invocation: set `public_network_access_enabled = !local.acr_is_private`
 - [ ] Update agent pool resource: add `count = local.acr_is_private ? 1 : 0`
 - [ ] Update `acr_agent_pool_name` output: add conditional null logic
 - [ ] Update `terraform.tfvars.example` with `acr_build_mode = "public"` and cost guidance comment
-- [ ] Update `infra/private-networking/README.md` with mode selection guide and build-path implications
+- [ ] Update `infra/terraform/README.md` with mode selection guide and build-path implications
 - [ ] Update `infra/scripts/print-github-vars-from-terraform.sh` to emit `ACR_BUILD_MODE` based on pool name output nullability
 - [ ] Update `infra/scripts/update-github-vars-from-terraform.sh` to handle null `AZURE_ACR_AGENT_POOL` gracefully
 - [ ] Validate idempotency with test matrix: public (apply, reapply) → private (apply, reapply) → public (apply, reapply)

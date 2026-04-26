@@ -1,6 +1,6 @@
 # Research: ACR Mode Toggle
 
-**Feature**: 006-toggle-acr-mode  
+**Feature**: 006-toggle-acr-mode
 **Date**: 2026-04-25
 
 ## R-001: Terraform conditional patterns for ACR public/private modes
@@ -21,7 +21,7 @@
 - **Implementation notes (Phase 1/2)**:
   - **Phase 1**: document variable schema and mode truth table in `data-model.md`.
   - **Phase 2**:
-    - Update `infra/private-networking/variables.tf`, `workload.tf`, `outputs.tf`, and `terraform.tfvars.example`.
+    - Update `infra/terraform/variables.tf`, `ai-platform.tf`, `outputs.tf`, and `terraform.tfvars.example`.
     - Guard output: `acr_agent_pool_name = local.acr_is_private ? azurerm_container_registry_agent_pool.acr_tasks[0].name : null`.
     - Add README section mapping mode to ACR network posture + build path.
 

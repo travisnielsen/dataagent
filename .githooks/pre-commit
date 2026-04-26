@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+MODE="${1:-}"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,21 +17,55 @@ NC='\033[0m'
 # Ensure uv is in PATH (for VS Code and other GUI git clients)
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
 
-# Protected branches
-PROTECTED_BRANCHES=("main" "master")
+validate_branch_policy() {
+    # Protected branches
+    local protected_branches=("main" "master")
+    local current_branch
+    current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
 
-current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
-
-for branch in "${PROTECTED_BRANCHES[@]}"; do
-    if [ "$current_branch" = "$branch" ]; then
-        echo -e "${RED}Error: Direct commits to '$branch' are not allowed!${NC}"
-        echo ""
-        echo "Please create a feature branch and submit a pull request:"
-        echo "  git checkout -b feature/your-feature-name"
-        echo ""
-        exit 1
+    # Detached HEAD: no branch policy check required.
+    if [[ -z "$current_branch" ]]; then
+        return 0
     fi
-done
+
+    for branch in "${protected_branches[@]}"; do
+        if [[ "$current_branch" == "$branch" ]]; then
+            echo -e "${RED}Error: Direct commits to '$branch' are not allowed!${NC}"
+            echo ""
+            echo "Please create a feature branch and submit a pull request:"
+            echo "  git checkout -b feat/<ticket>-<short-description>"
+            echo ""
+            return 1
+        fi
+    done
+
+    local docs_short_pattern='^docs/[a-z0-9]+(-[a-z0-9]+)*$'
+    local typed_ticket_pattern='^[a-z][a-z0-9-]*/[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$'
+
+    if [[ "$current_branch" =~ $docs_short_pattern || "$current_branch" =~ $typed_ticket_pattern ]]; then
+        return 0
+    fi
+
+    echo -e "${RED}Error: Branch name '$current_branch' does not match repository policy.${NC}"
+    echo ""
+    echo "Allowed patterns:"
+    echo "  <type>/<ticket>-<short-description>"
+    echo "  docs/<short-description>"
+    echo ""
+    echo "Examples:"
+    echo "  feat/123-template-matching"
+    echo "  fix/456-null-response"
+    echo "  docs/readme-update"
+    echo ""
+    return 1
+}
+
+validate_branch_policy
+
+if [[ "$MODE" == "--validate-branch" ]]; then
+    echo -e "${GREEN}Branch policy check passed!${NC}"
+    exit 0
+fi
 
 echo -e "${YELLOW}Running pre-commit checks...${NC}"
 

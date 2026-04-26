@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PRIVATE_NET_DIR="$(cd -- "$SCRIPT_DIR/../private-networking" && pwd)"
+TERRAFORM_DIR="$(cd -- "$SCRIPT_DIR/../terraform" && pwd)"
 
 APPLY_MODE=false
 REPO=""
@@ -17,7 +17,7 @@ Options:
   --repo owner/name  Target repository. Defaults to the current gh repo.
   -h, --help         Show this help.
 
-Reads Terraform outputs from infra/private-networking and maps them to GitHub
+Reads Terraform outputs from infra/terraform and maps them to GitHub
 repository variables.
 EOF
 }
@@ -48,8 +48,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -f "$PRIVATE_NET_DIR/outputs.tf" ]]; then
-  echo "Could not find private-networking Terraform directory: $PRIVATE_NET_DIR"
+if [[ ! -f "$TERRAFORM_DIR/outputs.tf" ]]; then
+  echo "Could not find Terraform directory: $TERRAFORM_DIR"
   exit 1
 fi
 
@@ -63,9 +63,9 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -d "$PRIVATE_NET_DIR/.terraform" ]]; then
-  echo "Terraform is not initialized in $PRIVATE_NET_DIR"
-  echo "Run: cd infra/private-networking && terraform init"
+if [[ ! -d "$TERRAFORM_DIR/.terraform" ]]; then
+  echo "Terraform is not initialized in $TERRAFORM_DIR"
+  echo "Run: cd infra/terraform && terraform init"
   exit 1
 fi
 
@@ -82,7 +82,7 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-OUTPUTS_JSON="$(terraform -chdir="$PRIVATE_NET_DIR" output -json 2>/dev/null || true)"
+OUTPUTS_JSON="$(terraform -chdir="$TERRAFORM_DIR" output -json 2>/dev/null || true)"
 if [[ -z "$OUTPUTS_JSON" ]]; then
   OUTPUTS_JSON="{}"
 fi

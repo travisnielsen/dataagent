@@ -25,10 +25,10 @@
 
 ### Step 1: Open Terraform Variables
 
-Edit or create `infra/private-networking/terraform.tfvars`:
+Edit or create `infra/terraform/terraform.tfvars`:
 
 ```bash
-cd infra/private-networking
+cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars  # (if starting fresh)
 nano terraform.tfvars  # or your preferred editor
 ```

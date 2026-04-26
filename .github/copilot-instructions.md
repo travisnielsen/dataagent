@@ -99,6 +99,7 @@ All task tracking uses **Spec Kit `tasks.md` files** in `specs/<feature>/tasks.m
 3. **Pydantic models** for all I/O (no raw dicts)
 4. **`uv run poe check`** must pass before commit
 5. **Conventional Commits**: `type(scope): description`
+6. **Branch naming compliance**: Before any `git switch -c` or `git branch -m`, enforce [CONTRIBUTING.md](../CONTRIBUTING.md) branch policy (`<type>/<ticket>-<short-description>`; docs-only shortcut `docs/<short-description>`). If required ticket is missing, ask the user before proceeding.
 
 
 ## Architecture Overview
@@ -218,9 +219,21 @@ cadence/
 │   │   │   └── workflow/
 │   │   └── models/            # Pydantic models
 │   └── frontend/              # Next.js + assistant-ui
-├── infra/                      # Terraform IaC
-│   ├── data/                  # Query templates, table metadata
-│   └── scripts/               # Shell scripts
+├── infra/                      # Infrastructure, deployment, and IaC assets
+│   ├── data/                  # Query templates and table metadata source files
+│   ├── search-config/         # AI Search index and schema configuration
+│   ├── scripts/               # Deployment and setup scripts
+│   └── terraform/             # Terraform root module (private networking stack)
+│       ├── ai-platform.tf     # AI platform resources (Foundry, Search, SQL, etc.)
+│       ├── networking.tf      # VNet, subnets, NSGs, private DNS/endpoints
+│       ├── compute.tf         # Container Apps and related compute resources
+│       ├── security.tf        # RBAC, identity, and security controls
+│       ├── observability.tf   # Monitoring and diagnostics resources
+│       ├── data.tf            # Data plane related resources and wiring
+│       ├── providers.tf       # Provider configuration
+│       ├── variables.tf       # Input variable definitions
+│       ├── outputs.tf         # Output values for downstream automation
+│       └── *.tfvars*          # Environment-specific variable files
 ├── tests/                     # Test suite
 │   ├── unit/
 │   └── integration/

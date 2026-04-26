@@ -5,9 +5,9 @@
 
 ## Summary
 
-This feature enables cost optimization by allowing operators to toggle Azure Container Registry (ACR) exposure between public and private modes in the private-networking deployment. When set to public (default), the expensive private ACR build agent pool is removed, and container images are built via the public Azure-hosted ACR build task. When set to private, the private build agent pool is created and the ACR blocks public network access. The deployment workflows (API and frontend CI/CD) will be updated to select the appropriate image build path based on configured mode.
+This feature enables cost optimization by allowing operators to toggle Azure Container Registry (ACR) exposure between public and private modes in the Terraform stack under `infra/terraform/`. When set to public (default), the expensive private ACR build agent pool is removed, and container images are built via the public Azure-hosted ACR build task. When set to private, the private build agent pool is created and the ACR blocks public network access. The deployment workflows (API and frontend CI/CD) will be updated to select the appropriate image build path based on configured mode.
 
-**Scope**: Terraform changes limited to `infra/private-networking/` only. Public-networking directory is out of scope and may be removed in future work.
+**Scope**: Terraform changes limited to `infra/terraform/` only.
 
 ## Technical Context
 
@@ -18,8 +18,8 @@ This feature enables cost optimization by allowing operators to toggle Azure Con
 **Target Platform**: Azure cloud (westus3 primary, eastus for Search, aifoundry region flexible)
 **Project Type**: Infrastructure as Code (Terraform) + CI/CD workflow updates
 **Performance Goals**: N/A (infrastructure configuration)
-**Constraints**: Private-networking ONLY; no public-networking changes; mode toggle must idempotently converge in single apply cycle
-**Scale/Scope**: Single deployment topology (private-networking); affects ACR + build agent pool + CI/CD workflows; 2 workflows to update (API build, frontend build)
+**Constraints**: `infra/terraform/` ONLY; mode toggle must idempotently converge in single apply cycle
+**Scale/Scope**: Single deployment topology (`infra/terraform/`); affects ACR + build agent pool + CI/CD workflows; 2 workflows to update (API build, frontend build)
 
 ## Constitution Check
 
@@ -53,10 +53,9 @@ specs/006-toggle-acr-mode/
 ### Source Code (Infrastructure)
 
 ```text
-infra/private-networking/
+infra/terraform/
 ├── variables.tf         # Feature: add acr_build_mode variable (public | private, default=public)
-├── main.tf              # No changes (passthrough)
-├── workload.tf          # Feature: conditionally create agent pool based on mode
+├── ai-platform.tf       # Feature: conditionally create agent pool based on mode
 ├── outputs.tf           # Feature: conditionally export agent pool reference
 ├── providers.tf         # No changes
 ├── terraform.tfvars     # Example: add acr_build_mode = "public"
@@ -144,7 +143,7 @@ High-level implementation order:
 3. Update agent pool resource with `count` conditional (only create when mode="private")
 4. Update outputs to conditionally export agent pool name/ID
 5. Update `terraform.tfvars.example` with mode examples and cost guidance
-6. Update `infra/private-networking/README.md` with operator guide
+6. Update `infra/terraform/README.md` with operator guide
 7. Update `.github/workflows/cd-api.yml` to detect mode and select build path
 8. Update `.github/workflows/cd-frontend.yml` to detect mode and select build path
 9. Add workflow validation to confirm mode alignment between infrastructure and workflow config
@@ -177,7 +176,6 @@ High-level implementation order:
 
 ## Notes
 
-- This plan assumes all Terraform code resides under `infra/private-networking/`.
-- Public-networking will not be modified and may be removed in future work.
+- This plan assumes all Terraform code resides under `infra/terraform/`.
 - The mode is driven by infrastructure configuration (`.tfvars`), not by per-deployment environment discovery.
 - CI/CD workflows will read mode from a GitHub repository variable (to be defined during Phase 2).

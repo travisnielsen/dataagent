@@ -13,6 +13,9 @@ Auto-generated from all feature plans. Last updated: 2026-03-24
 ## Project Structure
 
 ```text
+infra/
+	search-config/
+	terraform/
 src/
 tests/
 ```
@@ -32,4 +35,8 @@ Python 3.11+, TypeScript/Next.js: Follow standard conventions
 - 002-dynamic-query-enhancements: Added Python 3.11+, TypeScript/Next.js + FastAPI, Microsoft Agent Framework (MAF), Pydantic, React, assistant-ui, Tailwind CSS
 
 <!-- MANUAL ADDITIONS START -->
+- Branch operations must follow `CONTRIBUTING.md` branch naming policy.
+- Use `<type>/<ticket>-<short-description>` for non-docs branches.
+- `docs/<short-description>` is allowed for docs-only work.
+- If a non-docs ticket is missing, ask the user before creating or renaming a branch.
 <!-- MANUAL ADDITIONS END -->

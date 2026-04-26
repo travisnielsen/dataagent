@@ -1,7 +1,7 @@
 # Terraform Configuration Contract
 
 **Feature**: 006-toggle-acr-mode
-**Applies To**: `infra/private-networking/`
+**Applies To**: `infra/terraform/`
 **Version**: 1.0
 
 ## Variable Input Contract
@@ -25,7 +25,7 @@ variable "acr_build_mode" {
 
 ## Resource Configuration Contract
 
-### ACR Module Update in `workload.tf`
+### ACR Module Update in `ai-platform.tf`
 
 **Before**:
 ```hcl
@@ -53,7 +53,7 @@ module "container_registry" {
 
 ---
 
-### Agent Pool Resource Update in `workload.tf`
+### Agent Pool Resource Update in `ai-platform.tf`
 
 **Before**:
 ```hcl
