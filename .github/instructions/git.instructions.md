@@ -68,3 +68,10 @@ feat/123-oauth-login
 fix/456-null-response
 docs/readme-update
 ```
+
+When creating or renaming branches for the user, enforce branch policy proactively:
+
+1. Preferred pattern: `<type>/<ticket>-<short-description>`
+2. Allowed docs-only shortcut: `docs/<short-description>`
+3. If the branch type is not `docs` and no ticket is provided, ask for the ticket before creating/renaming
+4. Do not invent ticket IDs; require user-provided ticket or explicit user approval for an exception

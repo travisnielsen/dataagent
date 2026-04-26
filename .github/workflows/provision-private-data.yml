@@ -21,7 +21,7 @@ permissions:
 jobs:
   provision:
     name: Seed Storage and SQL from Private Runner
-    runs-on: [self-hosted, linux, x64, cadence-private]
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
@@ -143,7 +143,7 @@ jobs:
             STATE_ACCOUNT="$AZURE_STORAGE_ACCOUNT"
           fi
 
-          ./infra/private-networking/init-remote-state.sh "$STATE_ACCOUNT"
+          ./infra/terraform/init-remote-state.sh "$STATE_ACCOUNT"
 
       - name: Upload NL2SQL table metadata to private storage
         shell: bash

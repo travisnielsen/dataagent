@@ -1,4 +1,4 @@
-# main.tf - Private networking foundation for Cadence
+# networking.tf - Private networking foundation for Cadence
 
 data "azurerm_client_config" "current" {}
 
@@ -199,4 +199,30 @@ resource "azurerm_private_endpoint" "this" {
       error_message = "private_endpoints[*].dns_zone_name must exist in var.private_dns_zone_names."
     }
   }
+}
+
+resource "azurerm_public_ip" "bastion" {
+  name                = "${local.identifier}-bastion-pip"
+  resource_group_name = azurerm_resource_group.private_rg.name
+  location            = azurerm_resource_group.private_rg.location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  tags                = local.tags
+}
+
+resource "azurerm_bastion_host" "main" {
+  name                = "${local.identifier}-bastion"
+  resource_group_name = azurerm_resource_group.private_rg.name
+  location            = azurerm_resource_group.private_rg.location
+  sku                 = "Basic"
+  copy_paste_enabled  = true
+  tags                = local.tags
+
+  ip_configuration {
+    name                 = "bastion-ip-config"
+    subnet_id            = azurerm_subnet.azure_bastion.id
+    public_ip_address_id = azurerm_public_ip.bastion.id
+  }
+
+  depends_on = [time_sleep.wait_for_network_ready]
 }

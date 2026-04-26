@@ -29,7 +29,7 @@ fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-TFVARS_PATH="${REPO_ROOT}/private-networking/terraform.tfvars"
+TFVARS_PATH="${REPO_ROOT}/terraform/terraform.tfvars"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -104,6 +104,6 @@ ensure_member "$GH_SP_OBJECT_ID" "GitHub principal ($GH_SP_OBJECT_ID)"
 
 echo
 
-echo "Use these values in infra/private-networking/terraform.tfvars:"
+echo "Use these values in infra/terraform/terraform.tfvars:"
 echo "sql_azuread_admin_object_id      = \"$GROUP_ID\""
 echo "sql_azuread_admin_login_username = \"$GROUP_DISPLAY_NAME\""

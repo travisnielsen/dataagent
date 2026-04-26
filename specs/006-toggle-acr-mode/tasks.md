@@ -15,11 +15,11 @@
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Introduce the core mode configuration and baseline documentation for private-networking deployments.
+**Purpose**: Introduce the core mode configuration and baseline documentation for deployments managed in `infra/terraform/`.
 
-- [ ] T001 Add `acr_build_mode` variable with default `public` and enum validation in `infra/private-networking/variables.tf`
-- [ ] T002 [P] Add `acr_build_mode = "public"` with operator guidance comments in `infra/private-networking/terraform.tfvars.example`
-- [ ] T003 [P] Add ACR mode overview section and scope note (private-networking only) in `infra/private-networking/README.md`
+- [ ] T001 Add `acr_build_mode` variable with default `public` and enum validation in `infra/terraform/variables.tf`
+- [ ] T002 [P] Add `acr_build_mode = "public"` with operator guidance comments in `infra/terraform/terraform.tfvars.example`
+- [ ] T003 [P] Add ACR mode overview section and scope note (`infra/terraform/` only) in `infra/terraform/README.md`
 
 ---
 
@@ -32,7 +32,7 @@
 - [ ] T004 Add and align Terraform output contract notes for mode semantics in `specs/006-toggle-acr-mode/contracts/terraform-config.md`
 - [ ] T005 [P] Emit `ACR_BUILD_MODE` and null-safe `AZURE_ACR_AGENT_POOL` behavior in `infra/scripts/print-github-vars-from-terraform.sh`
 - [ ] T006 [P] Update GitHub variable update logic for `ACR_BUILD_MODE` and public-mode pool handling in `infra/scripts/update-github-vars-from-terraform.sh`
-- [ ] T007 Document script behavior and expected GitHub variable states in `infra/private-networking/README.md`
+- [ ] T007 Document script behavior and expected GitHub variable states in `infra/terraform/README.md`
 
 **Checkpoint**: Foundation ready. User stories can now proceed.
 
@@ -46,10 +46,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Add `local.acr_is_private` mode helper in `infra/private-networking/workload.tf`
-- [ ] T009 [US1] Switch container registry `public_network_access_enabled` to mode-driven behavior in `infra/private-networking/workload.tf`
-- [ ] T010 [US1] Make `azurerm_container_registry_agent_pool.acr_tasks` conditional with `count` in `infra/private-networking/workload.tf`
-- [ ] T011 [US1] Update `infra/private-networking/outputs.tf` for null-safe and `count`-index-safe agent pool output behavior after T010
+- [ ] T008 [US1] Add `local.acr_is_private` mode helper in `infra/terraform/ai-platform.tf`
+- [ ] T009 [US1] Switch container registry `public_network_access_enabled` to mode-driven behavior in `infra/terraform/ai-platform.tf`
+- [ ] T010 [US1] Make `azurerm_container_registry_agent_pool.acr_tasks` conditional with `count` in `infra/terraform/ai-platform.tf`
+- [ ] T011 [US1] Update `infra/terraform/outputs.tf` for null-safe and `count`-index-safe agent pool output behavior after T010
 - [ ] T012 [US1] Add mode-switch validation steps and expected Azure CLI checks in `specs/006-toggle-acr-mode/quickstart.md`
 - [ ] T013 [US1] Add Terraform convergence matrix commands (public→private→public) in `specs/006-toggle-acr-mode/quickstart.md`
 
@@ -70,7 +70,7 @@
 - [ ] T016 [P] [US2] Add `ACR_BUILD_MODE` environment wiring and validation step in `.github/workflows/cd-frontend.yml`
 - [ ] T017 [US2] Implement public/private conditional image build steps in `.github/workflows/cd-frontend.yml`
 - [ ] T018 [US2] Align workflow error messages and prerequisite checks with contract expectations in `specs/006-toggle-acr-mode/contracts/workflow-build-path.md`
-- [ ] T019 [US2] Document workflow mode selection behavior and failure remediation in `infra/private-networking/README.md`
+- [ ] T019 [US2] Document workflow mode selection behavior and failure remediation in `infra/terraform/README.md`
 
 **Checkpoint**: User Story 2 is complete when both CD workflows build successfully in both modes with explicit mode-aware behavior.
 
@@ -84,8 +84,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Finalize mode decision matrix and cost rationale in `infra/private-networking/README.md`
-- [ ] T021 [US3] Finalize `acr_build_mode` examples and explanatory comments in `infra/private-networking/terraform.tfvars.example`
+- [ ] T020 [US3] Finalize mode decision matrix and cost rationale in `infra/terraform/README.md`
+- [ ] T021 [US3] Finalize `acr_build_mode` examples and explanatory comments in `infra/terraform/terraform.tfvars.example`
 - [ ] T022 [US3] Update operator runbook for mode switching and verification in `specs/006-toggle-acr-mode/quickstart.md`
 - [ ] T023 [US3] Reconcile Terraform contract examples with implemented fields in `specs/006-toggle-acr-mode/contracts/terraform-config.md`
 - [ ] T024 [US3] Reconcile workflow contract examples with implemented YAML in `specs/006-toggle-acr-mode/contracts/workflow-build-path.md`
@@ -98,11 +98,11 @@
 
 **Purpose**: Final validation and quality gates across all stories.
 
-- [ ] T025 [P] Run Terraform formatting/validation for changed files in `infra/private-networking/variables.tf`, `infra/private-networking/workload.tf`, and `infra/private-networking/outputs.tf`
+- [ ] T025 [P] Run Terraform formatting/validation for changed files in `infra/terraform/variables.tf`, `infra/terraform/ai-platform.tf`, and `infra/terraform/outputs.tf`
 - [ ] T026 [P] Validate workflow syntax for `.github/workflows/cd-api.yml` and `.github/workflows/cd-frontend.yml`
 - [ ] T027 Validate mode transition matrix results and record evidence in `specs/006-toggle-acr-mode/quickstart.md`
 - [ ] T028 Run `uv run poe check` and capture outcome for this feature in `specs/006-toggle-acr-mode/plan.md`
-- [ ] T029 Verify FR-012 by auditing for any dependency/reference on `infra/public-networking/` and record evidence in `specs/006-toggle-acr-mode/plan.md`
+- [ ] T029 Verify FR-012 by auditing for any dependency/reference on legacy alternate-topology artifacts and record evidence in `specs/006-toggle-acr-mode/plan.md`
 - [ ] T030 Execute a documentation walkthrough validation for SC-005 and record evidence in `specs/006-toggle-acr-mode/quickstart.md`
 
 ---
@@ -184,6 +184,6 @@ Task: "T017 Implement public/private conditional image build steps in .github/wo
 
 ## Notes
 
-- Tasks preserve the explicit scope constraint: Terraform changes are limited to `infra/private-networking/`.
-- No tasks target `infra/public-networking/`.
+- Tasks preserve the explicit scope constraint: Terraform changes are limited to `infra/terraform/`.
+- No tasks target legacy alternate-topology artifacts.
 - Every task includes a concrete path and can be executed by an LLM without extra context.

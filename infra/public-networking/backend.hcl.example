@@ -1,5 +1,0 @@
-resource_group_name  = "rg-terraform-state"
-storage_account_name = "<your_tf_state_storage_account>"
-container_name       = "tfstate"
-key                  = "cadence-public-networking.terraform.tfstate"
-use_azuread_auth     = true
