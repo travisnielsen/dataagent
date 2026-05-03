@@ -44,6 +44,12 @@ variable "github_federated_principal_client_id" {
   description = "Optional client ID (application ID) for the GitHub OIDC federated principal. Used as SQL Entra admin login_username fallback when sql_azuread_admin_login_username is not provided."
 }
 
+variable "github_runner_identity_name" {
+  type        = string
+  default     = "cadence-gh-runner-id"
+  description = "User-assigned managed identity name used by the private GitHub runner Container Apps job."
+}
+
 variable "sql_azuread_admin_object_id" {
   type        = string
   default     = null

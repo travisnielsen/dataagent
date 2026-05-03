@@ -48,3 +48,10 @@ resource "azurerm_container_registry_agent_pool" "acr_tasks" {
     time_sleep.wait_for_network_ready
   ]
 }
+
+resource "azurerm_user_assigned_identity" "github_runner" {
+  name                = var.github_runner_identity_name
+  location            = azurerm_resource_group.private_rg.location
+  resource_group_name = azurerm_resource_group.private_rg.name
+  tags                = local.tags
+}

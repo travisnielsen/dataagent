@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          required_vars=(AZURE_RESOURCE_GROUP AZURE_CONTAINER_REGISTRY AZURE_CONTAINER_APP_ENVIRONMENT)
+          required_vars=(AZURE_RESOURCE_GROUP AZURE_CONTAINER_REGISTRY AZURE_CONTAINER_APP_ENVIRONMENT AZURE_GH_RUNNER_IDENTITY_NAME)
           for var_name in "${required_vars[@]}"; do
             value="${!var_name:-}"
             if [[ -z "$value" ]]; then
@@ -98,7 +98,7 @@ jobs:
           check_present "AZURE_CONTAINER_REGISTRY" "${AZURE_CONTAINER_REGISTRY:-}" "required"
           check_present "AZURE_CONTAINER_APP_ENVIRONMENT" "${AZURE_CONTAINER_APP_ENVIRONMENT:-}" "required"
           check_present "AZURE_LOCATION" "${AZURE_LOCATION:-}" "optional"
-          check_present "AZURE_GH_RUNNER_IDENTITY_NAME" "${AZURE_GH_RUNNER_IDENTITY_NAME:-}" "optional"
+          check_present "AZURE_GH_RUNNER_IDENTITY_NAME" "${AZURE_GH_RUNNER_IDENTITY_NAME:-}" "required"
           check_present "GH_RUNNER_REPO_OWNER" "${GH_RUNNER_REPO_OWNER:-}" "optional"
           check_present "GH_RUNNER_REPO_NAME" "${GH_RUNNER_REPO_NAME:-}" "optional"
           check_present "GH_RUNNER_APP_ID" "${GH_RUNNER_APP_ID:-}" "github-app"
@@ -190,51 +190,18 @@ jobs:
               --registry $AZURE_CONTAINER_REGISTRY \
               --status enabled
 
-      - name: Create or update identity and role assignments
+      - name: Resolve existing runner identity
         uses: azure/cli@v2.2.0
         with:
           inlineScript: |
             set -euo pipefail
 
             IDENTITY_NAME="${{ vars.AZURE_GH_RUNNER_IDENTITY_NAME }}"
-            if [[ -z "$IDENTITY_NAME" ]]; then
-              IDENTITY_NAME="cadence-gh-runner-id"
-            fi
-
-            LOCATION="$AZURE_LOCATION"
-            if [[ -z "$LOCATION" ]]; then
-              LOCATION=$(az group show --name "$AZURE_RESOURCE_GROUP" --query location -o tsv)
-            fi
-
-            az identity show \
-              --name "$IDENTITY_NAME" \
-              --resource-group $AZURE_RESOURCE_GROUP >/dev/null 2>&1 \
-              || az identity create \
-                --name "$IDENTITY_NAME" \
-                --resource-group $AZURE_RESOURCE_GROUP \
-                --location "$LOCATION"
 
             IDENTITY_ID=$(az identity show \
               --name "$IDENTITY_NAME" \
               --resource-group $AZURE_RESOURCE_GROUP \
               --query id -o tsv)
-
-            PRINCIPAL_ID=$(az identity show \
-              --name "$IDENTITY_NAME" \
-              --resource-group $AZURE_RESOURCE_GROUP \
-              --query principalId -o tsv)
-
-            ACR_ID=$(az acr show \
-              --name $AZURE_CONTAINER_REGISTRY \
-              --resource-group $AZURE_RESOURCE_GROUP \
-              --query id -o tsv)
-
-            az role assignment create \
-              --assignee-object-id "$PRINCIPAL_ID" \
-              --assignee-principal-type ServicePrincipal \
-              --role AcrPull \
-              --scope "$ACR_ID" \
-              --only-show-errors || true
 
             echo "IDENTITY_ID=$IDENTITY_ID" >> $GITHUB_ENV
 

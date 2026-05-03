@@ -14,6 +14,9 @@ azure_ad_allowed_tenant_ids = [
 github_federated_principal_object_id = "00000000-0000-0000-0000-000000000000"
 github_federated_principal_client_id = "00000000-0000-0000-0000-000000000000"
 
+# Optional override for Terraform-managed private runner identity name.
+# github_runner_identity_name = "cadence-gh-runner-id"
+
 # Optional SQL Entra admin override (recommended: Entra group object ID + display name).
 # Prerequisite: run `bash ./infra/scripts/ensure-sql-admin-group.sh` to create/verify
 # a shared admin group and print the values to copy below.
