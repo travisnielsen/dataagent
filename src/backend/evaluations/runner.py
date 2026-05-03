@@ -553,7 +553,7 @@ async def _submit_cloud_evaluation(
     """
     try:
         from azure.ai.projects import AIProjectClient  # noqa: PLC0415
-        from azure.identity import DefaultAzureCredential  # noqa: PLC0415
+        from azure.identity import AzureCliCredential  # noqa: PLC0415
     except ImportError as e:
         msg = f"Required SDK not available for cloud evaluation: {e}"
         raise ImportError(msg) from e
@@ -602,7 +602,7 @@ async def _submit_cloud_evaluation(
             ", ".join(sorted(unsupported_evaluators)),
         )
 
-    credential = DefaultAzureCredential()
+    credential = AzureCliCredential()
     client = AIProjectClient(
         endpoint=config.project_endpoint,
         credential=credential,
@@ -743,14 +743,14 @@ async def _poll_cloud_evaluation_result(
     """
     try:
         from azure.ai.projects import AIProjectClient  # noqa: PLC0415
-        from azure.identity import DefaultAzureCredential  # noqa: PLC0415
+        from azure.identity import AzureCliCredential  # noqa: PLC0415
     except ImportError as e:
         msg = f"Required SDK not available for cloud polling: {e}"
         raise ImportError(msg) from e
 
     client = AIProjectClient(
         endpoint=config.project_endpoint,
-        credential=DefaultAzureCredential(),
+        credential=AzureCliCredential(),
     )
 
     try:
@@ -963,9 +963,9 @@ async def register_custom_evaluator(
     _ = prompt_template  # reserved for SDK catalog registration
     try:
         from azure.ai.projects import AIProjectClient  # noqa: PLC0415
-        from azure.identity import DefaultAzureCredential  # noqa: PLC0415
+        from azure.identity import AzureCliCredential  # noqa: PLC0415
 
-        credential = DefaultAzureCredential()
+        credential = AzureCliCredential()
         _client = AIProjectClient(
             endpoint=config.project_endpoint,
             credential=credential,

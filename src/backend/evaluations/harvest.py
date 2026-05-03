@@ -51,12 +51,12 @@ async def harvest_foundry_traces(
     """
     try:
         from azure.ai.projects import AIProjectClient  # noqa: PLC0415
-        from azure.identity import DefaultAzureCredential  # noqa: PLC0415
+        from azure.identity import AzureCliCredential  # noqa: PLC0415
     except ImportError as e:
         msg = "azure-ai-projects not installed. Install with: pip install azure-ai-projects"
         raise ImportError(msg) from e
 
-    credential = DefaultAzureCredential()
+    credential = AzureCliCredential()
     client = AIProjectClient(endpoint=project_endpoint, credential=credential)
 
     records: list[DatasetRecord] = []
