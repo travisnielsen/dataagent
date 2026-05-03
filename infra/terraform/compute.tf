@@ -31,16 +31,26 @@ module "container_app_environment" {
   tags                    = local.tags
 }
 
-data "azapi_resource" "ai_foundry_hub" {
+# Query the AI Services account (Foundry resource) to derive endpoint URLs.
+# Uses modern resource + project pattern (not deprecated "hub" pattern).
+data "azapi_resource" "ai_services_account" {
   type                   = "Microsoft.CognitiveServices/accounts@2024-10-01"
   resource_id            = module.ai_foundry.ai_foundry_id
   response_export_values = ["properties.endpoint"]
 }
 
 locals {
-  ai_hub_endpoint     = data.azapi_resource.ai_foundry_hub.output.properties.endpoint
-  ai_project_name     = module.ai_foundry.ai_foundry_project_name["cadence"]
-  ai_project_endpoint = "${trimsuffix(local.ai_hub_endpoint, "/")}/api/projects/${local.ai_project_name}"
+  # AI Services account endpoint (Cognitive Services domain)
+  ai_services_account_endpoint = data.azapi_resource.ai_services_account.output.properties.endpoint
+
+  # Convert to modern AI services domain for project/agents API access
+  ai_services_api_endpoint = replace(local.ai_services_account_endpoint, ".cognitiveservices.azure.com", ".services.ai.azure.com")
+
+  # Project workspace name within the AI Services account
+  ai_project_name = module.ai_foundry.ai_foundry_project_name["cadence"]
+
+  # Full project endpoint for Azure AI Foundry agents and client SDKs
+  ai_project_endpoint = "${trimsuffix(local.ai_services_api_endpoint, "/")}/api/projects/${local.ai_project_name}"
 }
 
 resource "azurerm_user_assigned_identity" "api_identity" {
