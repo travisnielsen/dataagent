@@ -167,6 +167,11 @@ output "ai_project_endpoint" {
   value       = local.ai_project_endpoint
 }
 
+output "ai_model_deployment_name" {
+  description = "Azure AI model deployment name for evaluations and API"
+  value       = local.evaluation_model_deployment_name
+}
+
 output "sql_database_name" {
   description = "Azure SQL database name"
   value       = var.sql_database_name

@@ -85,10 +85,6 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
         )
 
 
-# Configure observability before creating the app
-configure_observability()
-
-
 @asynccontextmanager
 async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
     """
@@ -100,6 +96,10 @@ async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
     """
     # Startup logging
     logger.info("Enterprise Data Agent API starting")
+
+    # Configure observability only on startup, not at import time
+    # This avoids triggering OpenTelemetry deprecation warnings during test collection
+    configure_observability()
 
     # Log observability status
     if is_observability_enabled():

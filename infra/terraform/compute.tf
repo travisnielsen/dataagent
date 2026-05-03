@@ -183,7 +183,7 @@ resource "azurerm_container_app" "api" {
       }
       env {
         name  = "AZURE_AI_MODEL_DEPLOYMENT_NAME"
-        value = "gpt-5-chat"
+        value = local.evaluation_model_deployment_name
       }
       env {
         name  = "AZURE_AI_EMBEDDING_DEPLOYMENT"

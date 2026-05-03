@@ -5,11 +5,9 @@
 
 ## Summary
 
-Integrate Microsoft Foundry evaluation capabilities into the NL2SQL multi-agent pipeline to enable systematic quality measurement, CI-gated regression detection, and evaluation-driven optimization. Implementation uses the `azure-ai-evaluation` SDK with built-in and custom evaluators, versioned JSONL datasets (gold-curated and trace-harvested directly from Foundry using `AIProjectClient`), GitHub Actions CI/CD workflows for PR gating and nightly runs, and failure clustering aligned to pipeline stages for targeted remediation.
+Integrate Microsoft Foundry evaluation capabilities into the NL2SQL multi-agent pipeline to enable systematic quality measurement and evaluation-driven optimization. Implementation uses **ONLY** the Foundry native REST API with built-in evaluators, versioned JSONL datasets (gold-curated), and nightly GitHub Actions CI/CD workflow. Evaluations are executed exclusively via `run_cloud_evaluation()` in `src/backend/evaluations/runner.py` with **NO fallback to local evaluation** — if Foundry is unavailable, the run fails fast.
 
-Mixed dataset strategy: nightly automation uses `python -m evaluations harvest` to query Foundry for recent sessions, extract message pairs, merge with gold records (with optional deduplication), and use the mixed dataset for evaluation. Nightly Foundry-native runs are submitted via `evaluate(..., azure_ai_project=<project-endpoint>)` from the evaluation CLI (`--cloud`), with local fallback for resiliency if cloud submission fails.
-
-The feature ships in three phases: (1) evaluation contract, models, and built-in evaluators with gold dataset, (2) custom code/prompt evaluators for domain-specific quality, (3) CI integration, Foundry-native trace harvesting, and optimization loop.
+This is the single and only evaluation path in this repository. The `azure-ai-evaluation` SDK is **NOT** used for production evaluation workflows.
 
 ## Technical Context
 
@@ -76,8 +74,8 @@ src/backend/
 │       └── cadence-eval-p0-v1.jsonl      # P0 subset for PR gate (~50 records)
 
 .github/workflows/
-├── eval-pr-gate.yml                      # PR gate: P0 subset on pull_request
-└── eval-nightly.yml                      # Nightly: full suite on schedule
+├── eval-nightly.yml                      # ONLY evaluation workflow: nightly schedule via Foundry REST API
+└── (eval-pr-gate.yml removed 2026-05-03) # PR gate: removed to simplify CI, no evaluations in PR flow
 
 .foundry/                                 # Foundry workspace state
 ├── agent-metadata.yaml                   # Agent config with testCases[]
@@ -116,11 +114,17 @@ tests/unit/
 - Create P0 subset `cadence-eval-p0-v1.jsonl` (~50 critical prompts).
 - Each record includes `query`, `expected_behavior`, `scenario_class`, and optional `ground_truth_sql`/`ground_truth_params`.
 
-**Slice 1c: Evaluation Runner with Built-in Evaluators**
-- Implement `runner.py` with `run_evaluation()` async function.
-- Integrate Phase 1 built-in evaluators via `azure-ai-evaluation` SDK: `IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `RelevanceEvaluator`, `ToolCallAccuracyEvaluator`, plus `indirect_attack` safety evaluator.
-- Support both local SDK evaluation and Foundry cloud evaluation paths via CLI `--cloud` mode.
-- Emit SSE step events for evaluation lifecycle using existing `ProgressReporter` protocol.
+**Slice 1c: Evaluation Runner with Foundry REST API**
+- Implement `runner.py` with `run_cloud_evaluation()` async function using **ONLY** Foundry native REST APIs.
+- Integrate built-in evaluators via Azure AI Projects SDK: `intent_resolution`, `task_adherence`, `relevance`, `tool_call_accuracy`, `indirect_attack`.
+- Use Azure AI Projects `AIProjectClient` to:
+  - Load Foundry dataset assets by name and version
+  - Create evaluation definitions via `POST /openai/v1/evals`
+  - Submit async evaluation runs via `POST /openai/v1/evals/{eval_id}/runs`
+  - Poll for results via `GET /openai/v1/evals/{eval_id}/runs/{run_id}`
+- **NO** fallback to local evaluation — if Foundry is unavailable, fail fast
+- CLI support via `--cloud` flag (only method available)
+- Emit SSE step events for evaluation lifecycle using existing `ProgressReporter` protocol
 
 **Slice 1d: Unit Tests for Foundation**
 - Test model validation, config loading, dataset loading, runner orchestration (with mocked evaluators).
@@ -145,20 +149,16 @@ tests/unit/
 - Test parameter extraction evaluator against exact/partial/missing parameter matches.
 - Test failure clustering with synthetic evaluation results.
 
-### Phase 3: CI/CD and Trace Pipeline (P1 — Story 3, P2 — Stories 4, 5)
+### Phase 3: CI/CD Integration (P1 — Story 3)
 
-**Slice 3a: PR Gate Workflow**
-- `.github/workflows/eval-pr-gate.yml`: Triggers on PR to `main` modifying `src/backend/`.
-- Runs P0 subset with built-in + custom evaluators.
-- Fails merge on P0 threshold regression.
-- Posts metric summary as PR comment.
-
-**Slice 3b: Nightly Evaluation Workflow**
+**Slice 3a: Nightly Evaluation Workflow (ONLY evaluation in CI)**
 - `.github/workflows/eval-nightly.yml`: Scheduled cron (daily).
-- Runs full suite via Foundry cloud mode (`python -m evaluations --cloud`).
-- Publishes results to `.foundry/results/` and opens GitHub issue on regression.
+- Runs full evaluation suite using `run_cloud_evaluation()` via Foundry native REST API.
+- Invokes: `python -m evaluations run --dataset cadence-eval-gold-v1.jsonl --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy,indirect_attack --trigger nightly --cloud`
+- Publishes results to `.foundry/results/` and opens GitHub issue on metric regression.
+- **NOTE**: PR gate evaluation removed as of 2026-05-03 (commit cdf5b10) — CI focuses on code quality and tests only, evaluations run nightly only
 
-**Slice 3c: Trace Harvesting Pipeline**
+**Slice 3b: Trace Harvesting Pipeline**
 - `harvest.py`: KQL-based extraction from Application Insights.
 - Error harvest, latency harvest, low-eval-score harvest templates.
 - Sanitization pass for sensitive data removal.
