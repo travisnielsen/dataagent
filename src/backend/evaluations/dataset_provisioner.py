@@ -19,7 +19,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
-from azure.identity.aio import DefaultAzureCredential
+from azure.identity import AzureCliCredential
 
 logger = logging.getLogger(__name__)
 
@@ -209,11 +209,8 @@ async def sync_datasets(
 
     normalized_endpoint = _normalize_foundry_project_endpoint(project_endpoint)
 
-    credential = DefaultAzureCredential()
-    try:
-        token = (await credential.get_token("https://ai.azure.com/.default")).token
-    finally:
-        await credential.close()
+    credential = AzureCliCredential()
+    token = (await asyncio.to_thread(credential.get_token, "https://ai.azure.com/.default")).token
 
     summary = SyncSummary()
 
