@@ -266,3 +266,8 @@ When modifying workflow routing:
 - ChatAgent's `prompt.md` controls the triage logic (JSON routing vs direct response)
 - DataAgent's `handle_sql_draft` routes based on `SQLDraft` flags (`params_validated`, `query_validated`)
 - Add new executors in `workflow.py` with bidirectional edges to DataAgent
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
