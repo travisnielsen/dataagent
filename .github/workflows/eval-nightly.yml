@@ -42,6 +42,7 @@ jobs:
           # Evaluation runner
           AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT }}
           AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
+          AZURE_FOUNDRY_EVAL_NAME: ${{ vars.AZURE_FOUNDRY_EVAL_NAME }}
           # For evaluating SQL safety and executing queries
           AZURE_SEARCH_ENDPOINT: ${{ secrets.AZURE_SEARCH_ENDPOINT }}
           AZURE_SEARCH_INDEX_TABLES: ${{ secrets.AZURE_SEARCH_INDEX_TABLES }}

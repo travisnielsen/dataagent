@@ -197,6 +197,12 @@ map_and_set "AZURE_API_IDENTITY_NAME" "container_app_identity_name"
 map_and_set "AZURE_SEARCH_SERVICE_NAME" "search_service_name"
 map_and_set "AZURE_AI_FOUNDRY_ACCOUNT_NAME" "ai_foundry_account_name"
 map_and_set "AZURE_AI_MODEL_DEPLOYMENT_NAME" "ai_model_deployment_name"
+foundry_eval_name="$(read_output "foundry_eval_name")"
+if [[ -z "$foundry_eval_name" ]]; then
+  foundry_eval_name="cadence-eval-v1"
+  echo "INFO AZURE_FOUNDRY_EVAL_NAME using default (missing terraform output: foundry_eval_name)"
+fi
+set_repo_var "AZURE_FOUNDRY_EVAL_NAME" "$foundry_eval_name"
 map_and_set "AZURE_AI_PROJECT_ENDPOINT" "ai_project_endpoint"
 map_and_set "AZURE_GH_RUNNER_IDENTITY_NAME" "github_runner_identity_name"
 map_and_set "AZURE_SUBSCRIPTION_ID" "azure_subscription_id"

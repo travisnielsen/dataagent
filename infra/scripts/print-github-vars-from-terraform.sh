@@ -105,6 +105,11 @@ print_assignment "AZURE_SQL_DATABASE_NAME" "sql_database_name"
 print_assignment "AZURE_API_IDENTITY_NAME" "container_app_identity_name"
 print_assignment "AZURE_SEARCH_SERVICE_NAME" "search_service_name"
 print_assignment "AZURE_AI_FOUNDRY_ACCOUNT_NAME" "ai_foundry_account_name"
+foundry_eval_name="$(read_output "foundry_eval_name")"
+if [[ -z "$foundry_eval_name" ]]; then
+  foundry_eval_name="cadence-eval-v1"
+fi
+printf 'AZURE_FOUNDRY_EVAL_NAME=%s\n' "$foundry_eval_name"
 print_assignment "AZURE_AI_PROJECT_ENDPOINT" "ai_project_endpoint"
 print_assignment "AZURE_GH_RUNNER_IDENTITY_NAME" "github_runner_identity_name"
 print_assignment "AZURE_SUBSCRIPTION_ID" "azure_subscription_id"
