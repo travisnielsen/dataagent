@@ -7,17 +7,14 @@ Provides ``load_dataset()``, ``validate_dataset()``, ``run_evaluation()``,
 from __future__ import annotations
 
 import asyncio
-import importlib
 import json
 import logging
 import statistics
 import uuid
 from collections import Counter
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from tempfile import NamedTemporaryFile
-from typing import Any, cast
+from typing import Any
 
 from evaluations.config import DEFAULT_THRESHOLDS, EvaluationConfig
 from evaluations.models import (
@@ -370,11 +367,11 @@ async def run_cloud_evaluation(
     branch: str | None = None,
     correlation_id: str | None = None,
 ) -> tuple[EvaluationRun, RunSummary | None]:
-    """Submit evaluation to Foundry cloud batch runtime.
+    """Submit evaluation to Foundry cloud using modern evaluate() API.
 
-    Uses ``AIProjectClient`` and ``evaluation_agent_batch_eval_create``
-    for full-suite cloud runs. Falls back to local evaluation if the
-    Foundry SDK is unavailable.
+    Uses the modern ``azure.ai.evaluation.evaluate()`` function which automatically
+    submits to Foundry when ``azure_ai_project`` is provided. Results appear in
+    the new Foundry portal. Falls back to local evaluation if cloud submission fails.
 
     Args:
         dataset_path: Path to JSONL dataset.
@@ -417,51 +414,22 @@ async def run_cloud_evaluation(
             branch=branch,
         )
 
-    try:
-        evaluation_module = importlib.import_module("azure.ai.evaluation")
-        evaluate_fn = cast(Callable[..., dict[str, object]], evaluation_module.evaluate)
-    except ImportError:
-        logger.warning("azure-ai-evaluation not available, using local evaluation")
-        return await run_evaluation(
-            dataset_path=dataset_path,
-            evaluator_names=evaluator_names,
-            config=config,
-            trigger=trigger,
-            git_sha=git_sha,
-            branch=branch,
-        )
-
     records = load_dataset(dataset_path)
     logger.info(
-        "Submitting Foundry evaluation: %d records, %d evaluators",
+        "Submitting Foundry evaluation via modern evaluate() API: %d records, %d evaluators",
         len(records),
         len(evaluator_names),
     )
 
-    prepared_dataset = _prepare_foundry_dataset(dataset_path)
-    loop = asyncio.get_running_loop()
-
-    def _run_foundry_eval() -> dict[str, object]:
-        evaluators = _build_foundry_evaluators(evaluator_names, config)
-        output_path = Path(".foundry/results") / f"foundry-{run_id}.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        return evaluate_fn(
-            data=str(prepared_dataset),
-            evaluators=evaluators,
-            evaluation_name=f"cadence-{trigger}-{run_id}",
-            azure_ai_project=config.project_endpoint,
-            output_path=str(output_path),
-            tags={
-                "run_id": run_id,
-                "dataset_version": config.dataset_version,
-                "trigger": trigger,
-            },
-        )
-
     try:
-        result = await loop.run_in_executor(None, _run_foundry_eval)
+        result = await _submit_cloud_evaluation(
+            evaluator_names=evaluator_names,
+            config=config,
+            run_id=run_id,
+            trigger=trigger,
+        )
     except Exception:
-        logger.exception("Foundry evaluation failed, falling back to local evaluation")
+        logger.exception("Foundry cloud evaluation failed, falling back to local evaluation")
         return await run_evaluation(
             dataset_path=dataset_path,
             evaluator_names=evaluator_names,
@@ -470,19 +438,13 @@ async def run_cloud_evaluation(
             git_sha=git_sha,
             branch=branch,
         )
-    finally:
-        prepared_dataset.unlink(missing_ok=True)
 
-    raw_metrics = result.get("metrics", {})
-    if isinstance(raw_metrics, dict):
-        raw_metrics_typed = cast(dict[object, object], raw_metrics)
-        metrics_payload: dict[str, object] = {
-            str(key): value for key, value in raw_metrics_typed.items()
-        }
-    else:
-        metrics_payload = {}
+    # Extract metrics from Foundry result
+    metrics_result = result.get("metrics", {})
+    if not isinstance(metrics_result, dict):
+        metrics_result = {}
     metrics = _build_metric_results_from_foundry(
-        metrics_payload=metrics_payload,
+        metrics_payload=metrics_result,
         thresholds={t.metric: t.min_score for t in config.thresholds},
     )
 
@@ -494,6 +456,7 @@ async def run_cloud_evaluation(
 
     run.status = "completed"
     run.completed_at = datetime.now(UTC).isoformat()
+    # Studio URL is available in result if Foundry provides it
     studio_url = result.get("studio_url")
     run.eval_id = studio_url if isinstance(studio_url, str) else None
 
@@ -510,34 +473,149 @@ async def run_cloud_evaluation(
     return run, summary
 
 
-def _prepare_foundry_dataset(source_path: Path) -> Path:
-    """Convert project dataset records into Foundry evaluator-friendly JSONL.
+# ---------------------------------------------------------------------------
+# Cloud evaluation submission using modern evaluate() API
+# ---------------------------------------------------------------------------
+
+
+async def _submit_cloud_evaluation(
+    *,
+    evaluator_names: list[str],
+    config: EvaluationConfig,
+    run_id: str,
+    trigger: str,
+) -> dict[str, object]:
+    """Submit evaluation to Foundry using modern evaluate() API.
+
+    Uses the ``azure.ai.evaluation.evaluate()`` function which automatically
+    submits to Foundry when ``azure_ai_project`` is provided. Results appear
+    in the new Foundry portal.
+
+    References an existing Foundry dataset by name and version instead of
+    uploading a local file.
 
     Args:
-        source_path: Source dataset path using ``DatasetRecord`` schema.
+        evaluator_names: Which evaluators to invoke.
+        config: Evaluation configuration.
+        run_id: Unique evaluation run identifier.
+        trigger: What triggered this run.
 
     Returns:
-        Temporary JSONL path with required evaluator fields.
-    """
-    records = load_dataset(source_path)
-    with NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as tmp:
-        for record in records:
-            payload: dict[str, Any] = {
-                "query": record.query,
-                # Fallback keeps built-in evaluators runnable for current datasets.
-                "response": record.context or record.expected_behavior,
-                "expected_behavior": record.expected_behavior,
-                "scenario_class": record.scenario_class,
-            }
-            if record.conversation is not None:
-                payload["conversation"] = record.conversation
-            if record.ground_truth_sql is not None:
-                payload["ground_truth_sql"] = record.ground_truth_sql
-            if record.ground_truth_params is not None:
-                payload["ground_truth_params"] = record.ground_truth_params
+        Result dictionary with metrics extracted from evaluation output.
 
-            tmp.write(json.dumps(payload) + "\n")
-        return Path(tmp.name)
+    Raises:
+        ImportError: If azure-ai-evaluation SDK is unavailable.
+        RuntimeError: If cloud evaluation submission fails.
+    """
+    try:
+        from azure.ai.evaluation import evaluate  # noqa: PLC0415
+    except ImportError as e:
+        msg = f"Required SDK not available for cloud evaluation: {e}"
+        raise ImportError(msg) from e
+
+    try:
+        # Build evaluators dict for evaluate() function
+        evaluators = _build_foundry_evaluators(evaluator_names, config)
+
+        if not evaluators:
+            msg = f"No valid evaluators could be built from: {evaluator_names}"
+            raise RuntimeError(msg)
+
+        # Get the Foundry dataset reference instead of using local file
+        dataset_uri = await _get_foundry_dataset_uri(
+            config=config,
+            dataset_name=config.dataset_name,
+            dataset_version=config.dataset_version,
+        )
+
+        logger.info(
+            "Calling evaluate() with %d evaluators, Foundry dataset: %s",
+            len(evaluators),
+            dataset_uri,
+        )
+
+        # Submit to Foundry using modern evaluate() API
+        # When azure_ai_project is provided, results are sent to Foundry
+        result = await asyncio.to_thread(
+            evaluate,
+            data=dataset_uri,
+            evaluators=evaluators,
+            evaluation_name=f"cadence-{trigger}-{run_id}",
+            azure_ai_project=config.project_endpoint,
+            tags={
+                "run_id": run_id,
+                "dataset_version": config.dataset_version,
+                "trigger": trigger,
+            },
+        )
+    except Exception as e:
+        msg = f"Cloud evaluation via evaluate() failed: {e}"
+        logger.error(msg, exc_info=True)
+        raise RuntimeError(msg) from e
+    else:
+        logger.info("Cloud evaluation submitted successfully to Foundry")
+
+        # Extract metrics from result (EvaluationResult TypedDict)
+        metrics: dict[str, object] = result.get("metrics", {})  # type: ignore[union-attr]
+
+        return {
+            "metrics": metrics,
+            "studio_url": None,  # Foundry will provide this in the portal
+        }
+
+
+async def _get_foundry_dataset_uri(
+    *,
+    config: EvaluationConfig,
+    dataset_name: str,
+    dataset_version: str,
+) -> str:
+    """Retrieve the data_uri for an existing Foundry dataset.
+
+    Args:
+        config: Evaluation configuration with project_endpoint.
+        dataset_name: Name of the dataset in Foundry.
+        dataset_version: Version of the dataset (e.g., 'v1').
+
+    Returns:
+        The data_uri string for the Foundry dataset.
+
+    Raises:
+        RuntimeError: If dataset cannot be retrieved.
+    """
+    try:
+        from azure.ai.projects import AIProjectClient  # noqa: PLC0415
+        from azure.identity import DefaultAzureCredential  # noqa: PLC0415
+    except ImportError as e:
+        msg = f"Required SDK not available: {e}"
+        raise ImportError(msg) from e
+
+    credential = DefaultAzureCredential()
+    client = AIProjectClient(
+        endpoint=config.project_endpoint,
+        credential=credential,
+    )
+
+    try:
+        logger.info("Retrieving Foundry dataset: %s/%s", dataset_name, dataset_version)
+
+        # Get the dataset version from Foundry
+        dataset_version_obj = await asyncio.to_thread(
+            client.datasets.get,
+            name=dataset_name,
+            version=dataset_version,
+        )
+
+        data_uri = dataset_version_obj.data_uri
+    except Exception as e:
+        msg = f"Failed to retrieve Foundry dataset {dataset_name}/{dataset_version}: {e}"
+        logger.error(msg, exc_info=True)
+        raise RuntimeError(msg) from e
+    else:
+        logger.info("Retrieved Foundry dataset URI: %s", data_uri)
+        return data_uri
+    finally:
+        client.close()
 
 
 def _build_foundry_evaluators(
@@ -560,13 +638,16 @@ def _build_foundry_evaluators(
         TaskAdherenceEvaluator,
         ToolCallAccuracyEvaluator,
     )
-    from azure.identity import DefaultAzureCredential  # noqa: PLC0415
 
-    credential = DefaultAzureCredential()
+    # When using cloud evaluation with azure_ai_project, use minimal model_config.
+    # The evaluate() function will handle credential-based auth automatically.
+    # Extract endpoint without /api/projects/... part
+    endpoint = _derive_foundry_host_endpoint(config.project_endpoint)
+
     model_config: dict[str, object] = {
-        "azure_endpoint": _derive_foundry_host_endpoint(config.project_endpoint),
+        "type": "azure_openai",
+        "azure_endpoint": endpoint,
         "azure_deployment": config.judge_model_deployment,
-        "credential": credential,
     }
 
     evaluators: dict[str, Any] = {}
@@ -588,8 +669,10 @@ def _build_foundry_evaluators(
             continue
 
         if name == "indirect_attack":
+            # IndirectAttackEvaluator handles authentication through azure_ai_project
+            # in the evaluate() function context
             evaluators[name] = IndirectAttackEvaluator(
-                credential=credential,
+                credential=None,
                 azure_ai_project=config.project_endpoint,
             )
             continue

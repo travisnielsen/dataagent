@@ -95,9 +95,9 @@ async def _dataset_exists(
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    if response.status_code == httpx.codes.OK:
+    if response.status_code in {200, 201, 202}:
         return True
-    if response.status_code == httpx.codes.NOT_FOUND:
+    if response.status_code == 404:  # noqa: PLR2004
         return False
 
     response.raise_for_status()
