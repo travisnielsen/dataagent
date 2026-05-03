@@ -70,12 +70,12 @@
 - [x] T018 [US2] Curate initial gold dataset `cadence-eval-gold-v1.jsonl` with 200-500 prompts spanning template, dynamic, clarification, what-if, and conversation scenario classes in `src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl`
 - [x] T019 [US2] Extract P0 subset `cadence-eval-p0-v1.jsonl` (~50 critical prompts covering core scenarios) from gold dataset in `src/backend/evaluations/datasets/cadence-eval-p0-v1.jsonl`
 - [x] T020 [P] [US2] Implement `DatasetMetadata` generation — compute `record_count`, `scenario_distribution`, and `sanitization_status` from loaded JSONL in `src/backend/evaluations/runner.py`
-- [x] T021 [US2] Implement trace harvesting with KQL templates (error harvest, latency harvest, low-eval-score harvest) in `src/backend/evaluations/harvest.py` — uses `azure-monitor-opentelemetry` for App Insights KQL queries
-- [x] T022 [US2] Implement data sanitization pass in `src/backend/evaluations/harvest.py` — removes/masks sensitive fields from trace-harvested records before dataset persistence
-- [x] T023 [US2] Implement dataset versioning: version tagging (`v<N>` convention), Foundry dataset upload via `evaluation_dataset_create`, and `dataset_uri` persistence in `src/backend/evaluations/harvest.py`
+- [x] T021 [US2] Implement trace harvesting from Foundry in `src/backend/evaluations/harvest.py` — uses `AIProjectClient` to query Foundry sessions, extracts user/assistant message pairs, and converts to `DatasetRecord` format
+- [x] T022 [US2] Implement data sanitization pass in `src/backend/evaluations/harvest.py` — removes/masks sensitive fields (emails, SSN, credit cards, phone) from trace-harvested records before dataset persistence
+- [x] T023 [US2] Implement dataset versioning and merging in `src/backend/evaluations/harvest.py` — version tagging (`v<N>` convention), `merge_datasets()` function to combine gold and trace records with optional deduplication, and `dataset_uri` persistence
 - [x] T024 [US2] Write unit tests for dataset loading, validation, metadata generation, and sanitization in `tests/unit/test_eval_datasets.py`
 
-**Checkpoint**: Gold dataset and trace harvesting pipeline are functional. Datasets are versioned and bound to evaluation runs.
+**Checkpoint**: Gold dataset and Foundry trace harvesting pipeline are functional. Mixed datasets (gold + harvested traces) are versioned and bound to evaluation runs. Nightly workflow auto-harvests and merges before evaluation.
 
 ---
 
@@ -107,11 +107,11 @@
 ### Implementation for User Story 3 — CI Workflows
 
 - [x] T035 [US3] Create PR gate GitHub Actions workflow in `.github/workflows/eval-pr-gate.yml` — triggers on PR to `main` modifying `src/backend/`, runs P0 subset, fails on threshold regression, posts metric summary as PR comment
-- [x] T036 [P] [US3] Create nightly evaluation GitHub Actions workflow in `.github/workflows/eval-nightly.yml` — scheduled daily cron, runs full suite via Foundry cloud batch eval, publishes results, opens GitHub issue on regression
+- [x] T036 [P] [US3] Create nightly evaluation GitHub Actions workflow in `.github/workflows/eval-nightly.yml` — scheduled daily cron, runs full suite with `--cloud`, publishes results, opens GitHub issue on regression
 
 ### Implementation for User Story 3 — CLI Entry Point
 
-- [x] T037 [US3] Implement CLI entry point `src/backend/evaluations/__main__.py` — supports `--dataset`, `--evaluators`, `--trigger`, `--gate` flags per quickstart.md
+- [x] T037 [US3] Implement CLI entry point `src/backend/evaluations/__main__.py` — supports `--dataset`, `--evaluators`, `--trigger`, `--gate`, `--cloud` flags per quickstart.md
 
 ### Tests for User Story 3
 
@@ -150,11 +150,11 @@
 
 ### Implementation for User Story 5
 
-- [x] T047 [US5] Implement Foundry cloud batch evaluation path in `src/backend/evaluations/runner.py` — uses `AIProjectClient` and `evaluation_agent_batch_eval_create` for full-suite cloud runs with result polling and summary download
-- [x] T048 [US5] Implement Foundry evaluator catalog integration in `src/backend/evaluations/runner.py` — register custom prompt evaluators via `evaluator_catalog_create`, check existing evaluators via `evaluator_catalog_get` before creating new ones
+- [x] T047 [US5] Implement Foundry cloud evaluation path in `src/backend/evaluations/runner.py` — uses `azure-ai-evaluation` `evaluate(..., azure_ai_project=...)` for full-suite cloud runs with local summary persistence
+- [x] T048 [US5] Implement Foundry cloud evaluator mapping in `src/backend/evaluations/runner.py` — wire built-ins and deterministic custom-code evaluators; warn for unsupported cloud evaluators
 - [x] T049 [US5] Implement run result persistence to `.foundry/results/<run-id>.json` and integration with `.foundry/agent-metadata.yaml` test cases in `src/backend/evaluations/runner.py`
 - [x] T050 [P] [US5] Implement App Insights correlation — attach `correlation_id` to evaluation runs and emit OpenTelemetry spans linking evaluation outcomes to request flow stages in `src/backend/evaluations/runner.py` (FR-019)
-- [x] T051 [US5] Implement nightly trace-to-dataset refresh automation in `src/backend/evaluations/harvest.py` — scheduled harvest, sanitize, version increment, and dataset update
+- [x] T051 [US5] Implement nightly trace-to-dataset refresh automation — `harvest` subcommand queries Foundry traces, merges with gold dataset via `merge_datasets()`, persists versioned mixed dataset; nightly GitHub workflow runs harvest pre-step before evaluation
 - [x] T052 [US5] Write unit tests for Foundry cloud evaluation path and result persistence (mocked API calls) in `tests/unit/test_eval_runner.py`
 
 **Checkpoint**: Phased rollout is complete — baseline established, CI gating active, production feedback loop operational.

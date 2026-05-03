@@ -5,21 +5,23 @@
 
 ## Summary
 
-Integrate Microsoft Foundry evaluation capabilities into the NL2SQL multi-agent pipeline to enable systematic quality measurement, CI-gated regression detection, and evaluation-driven optimization. Implementation uses the `azure-ai-evaluation` SDK with built-in and custom evaluators, versioned JSONL datasets (gold-curated and trace-harvested from Application Insights), GitHub Actions CI/CD workflows for PR gating and nightly runs, and failure clustering aligned to pipeline stages for targeted remediation.
+Integrate Microsoft Foundry evaluation capabilities into the NL2SQL multi-agent pipeline to enable systematic quality measurement, CI-gated regression detection, and evaluation-driven optimization. Implementation uses the `azure-ai-evaluation` SDK with built-in and custom evaluators, versioned JSONL datasets (gold-curated and trace-harvested directly from Foundry using `AIProjectClient`), GitHub Actions CI/CD workflows for PR gating and nightly runs, and failure clustering aligned to pipeline stages for targeted remediation.
 
-The feature ships in three phases: (1) evaluation contract, models, and built-in evaluators with gold dataset, (2) custom code/prompt evaluators for domain-specific quality, (3) CI integration, trace harvesting, and optimization loop.
+Mixed dataset strategy: nightly automation uses `python -m evaluations harvest` to query Foundry for recent sessions, extract message pairs, merge with gold records (with optional deduplication), and use the mixed dataset for evaluation. Nightly Foundry-native runs are submitted via `evaluate(..., azure_ai_project=<project-endpoint>)` from the evaluation CLI (`--cloud`), with local fallback for resiliency if cloud submission fails.
+
+The feature ships in three phases: (1) evaluation contract, models, and built-in evaluators with gold dataset, (2) custom code/prompt evaluators for domain-specific quality, (3) CI integration, Foundry-native trace harvesting, and optimization loop.
 
 ## Technical Context
 
 **Language/Version**: Python 3.11+
-**Primary Dependencies**: `azure-ai-evaluation`, `azure-ai-projects` (via `agent-framework`), `azure-identity`, `azure-monitor-opentelemetry`, FastAPI, Pydantic v2
-**Storage**: JSONL files (datasets), Application Insights (traces), Foundry project (cloud eval runs)
+**Primary Dependencies**: `azure-ai-evaluation`, `azure-ai-projects` (via `agent-framework`), `azure-identity`, FastAPI, Pydantic v2
+**Storage**: JSONL files (datasets), Foundry project (cloud eval runs and session traces)
 **Testing**: `pytest`/`pytest-asyncio`, `uv run poe check`
 **Target Platform**: Linux-hosted backend + GitHub Actions CI
 **Project Type**: Backend evaluation package added to existing web-service monorepo
 **Performance Goals**: PR gate evaluation completes within 10 minutes for ~50 P0 prompts; nightly full suite within 60 minutes for 200-500 prompts
 **Constraints**: No blocking I/O in evaluation code paths; evaluation must not impact runtime request handling; gold datasets must be source-controlled
-**Scale/Scope**: 200-500 evaluation dataset records, 5 built-in + 4 custom evaluators, 2 CI workflows
+**Scale/Scope**: 200-500 evaluation dataset records (mixed gold+trace), 5 built-in + 4 custom evaluators, 2 CI workflows
 
 ## Constitution Check
 
@@ -99,7 +101,7 @@ tests/unit/
 - Confirm `azure-ai-evaluation` SDK compatibility with existing `agent-framework` dependency.
 - Confirm built-in evaluator availability: `intent_resolution`, `task_adherence`, `tool_call_accuracy`, `relevance`, `indirect_attack`.
 - Confirm KQL trace harvesting patterns against current Application Insights instrumentation.
-- Confirm Foundry project endpoint supports `evaluation_agent_batch_eval_create` for cloud runs.
+- Confirm Foundry project endpoint supports `azure-ai-evaluation` cloud publishing via `azure_ai_project`.
 - Research deliverables: [research.md](research.md).
 
 ### Phase 1: Evaluation Foundation (P1 — Stories 1, 2, 3)
@@ -117,7 +119,7 @@ tests/unit/
 **Slice 1c: Evaluation Runner with Built-in Evaluators**
 - Implement `runner.py` with `run_evaluation()` async function.
 - Integrate Phase 1 built-in evaluators via `azure-ai-evaluation` SDK: `IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `RelevanceEvaluator`, `ToolCallAccuracyEvaluator`, plus `indirect_attack` safety evaluator.
-- Support both local SDK evaluation and Foundry cloud batch evaluation paths.
+- Support both local SDK evaluation and Foundry cloud evaluation paths via CLI `--cloud` mode.
 - Emit SSE step events for evaluation lifecycle using existing `ProgressReporter` protocol.
 
 **Slice 1d: Unit Tests for Foundation**
@@ -153,7 +155,7 @@ tests/unit/
 
 **Slice 3b: Nightly Evaluation Workflow**
 - `.github/workflows/eval-nightly.yml`: Scheduled cron (daily).
-- Runs full suite via Foundry cloud batch eval.
+- Runs full suite via Foundry cloud mode (`python -m evaluations --cloud`).
 - Publishes results to `.foundry/results/` and opens GitHub issue on regression.
 
 **Slice 3c: Trace Harvesting Pipeline**

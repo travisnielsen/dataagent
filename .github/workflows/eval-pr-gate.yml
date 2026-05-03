@@ -2,7 +2,7 @@ name: Evaluation PR Gate
 
 on:
   pull_request:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "src/backend/**"
 
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   eval-pr-gate:
-    runs-on: [self-hosted, linux, x64, cadence-private]
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
     timeout-minutes: 15
 
     steps:
@@ -32,10 +32,16 @@ jobs:
       - name: Run P0 evaluation gate
         env:
           PYTHONPATH: src/backend
+          # Evaluation runner
           AZURE_AI_PROJECT_ENDPOINT: ${{ secrets.AZURE_AI_PROJECT_ENDPOINT }}
           AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
+          # For evaluating SQL safety and executing queries
+          AZURE_SEARCH_ENDPOINT: ${{ secrets.AZURE_SEARCH_ENDPOINT }}
+          AZURE_SEARCH_INDEX_TABLES: ${{ secrets.AZURE_SEARCH_INDEX_TABLES }}
+          AZURE_SQL_SERVER: ${{ secrets.AZURE_SQL_SERVER }}
+          AZURE_SQL_DATABASE: ${{ secrets.AZURE_SQL_DATABASE }}
         run: |
-          uv run python -m evaluations \
+          uv run python -m evaluations run \
             --dataset src/backend/evaluations/datasets/cadence-eval-p0-v1.jsonl \
             --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy,indirect_attack,sql_safety,param_extraction_correctness \
             --trigger ci_pr \

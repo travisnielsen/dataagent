@@ -121,7 +121,7 @@ Immutable record of a single evaluation execution.
 class EvaluationRun(BaseModel):
     """Record of a single evaluation run."""
     run_id: str                          # Unique identifier
-    eval_id: str | None = None           # Foundry evaluation ID (cloud runs)
+    eval_id: str | None = None           # Foundry run linkage (Studio URL/ID for cloud runs)
     dataset_name: str
     dataset_version: str
     evaluator_names: list[str]

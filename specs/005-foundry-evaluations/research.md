@@ -5,9 +5,9 @@
 
 ## R-001: Evaluation SDK and Runtime
 
-**Decision**: Use `azure-ai-evaluation` SDK with `AIAgentConverter` for local/CI evaluation runs, and `azure-ai-projects` `AIProjectClient` for cloud-managed batch evaluations via Foundry runtime.
+**Decision**: Use `azure-ai-evaluation` SDK `evaluate()` for both local/CI and Foundry-native cloud runs, with cloud publishing enabled through `azure_ai_project=<project-endpoint>`.
 
-**Rationale**: The codebase already depends on `azure-ai-projects` (via `agent-framework`) and `azure-identity`. The `azure-ai-evaluation` package provides `evaluate()`, built-in evaluators (`IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `RelevanceEvaluator`, `ToolCallAccuracyEvaluator`), and `AIAgentConverter` for preparing agent conversation threads into JSONL evaluation data. Cloud batch evaluations through `evaluation_agent_batch_eval_create` integrate with the existing Foundry project endpoint.
+**Rationale**: The codebase already depends on `azure-ai-projects` (via `agent-framework`) and `azure-identity`. The `azure-ai-evaluation` package provides `evaluate()`, built-in evaluators (`IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `RelevanceEvaluator`, `ToolCallAccuracyEvaluator`), and project publishing through `azure_ai_project`. This allows the same evaluator orchestration path to run locally and to create Foundry-native evaluation records.
 
 **Alternatives considered**:
 
@@ -25,16 +25,19 @@
 - CSV format: rejected because nested conversation history cannot be represented.
 - Azure Blob-only storage: rejected because gold datasets need source-control versioning and review.
 
-## R-003: Trace Harvesting from Application Insights
+## R-003: Trace Harvesting — Foundry Native Traces (Updated 2026-05-02)
 
-**Decision**: Use KQL queries via `azure-monitor-opentelemetry` traces in Application Insights to extract conversation data. Harvest from `dependencies` table (agent spans) joined with `customEvents` (evaluation results) using `gen_ai.response.id` as the correlation key.
+**Decision**: Use `AIProjectClient` from `azure-ai-projects` SDK to query Foundry project sessions and extract conversation traces directly. Harvest recent session/run data using the agents API, extract user/assistant message pairs, and convert to `DatasetRecord` format. Mixed strategy: combine gold-curated records with automatically harvested traces, with optional deduplication by query text.
 
-**Rationale**: The codebase already configures Application Insights via `azure-monitor-opentelemetry` in `src/backend/api/monitoring.py` with `ENABLE_INSTRUMENTATION` and `APPLICATIONINSIGHTS_CONNECTION_STRING`. GenAI semantic conventions (`gen_ai.operation.name`, `gen_ai.conversation.id`, `gen_ai.response.id`) are emitted by the agent framework's OpenTelemetry instrumentation. KQL templates from the Foundry trace skill provide tested patterns for error harvesting, latency harvesting, and low-eval-score harvesting.
+**Rationale**: Foundry is the canonical storage for all evaluation artifacts (runs, datasets, evaluators). Using Foundry's native trace export (via `AIProjectClient`) eliminates the dependency on Application Insights KQL and provides a single source of truth. The `azure-ai-projects` SDK is already a project dependency (via `agent-framework`). Message pairs are extracted by pairing consecutive user/assistant messages in session history, converted to `DatasetRecord` objects, and merged with gold records for a mixed evaluation dataset.
+
+**Previous Decision (R-003v1)**: KQL queries via Application Insights have been superseded. Initial KQL approach used dependency/custom event correlation; Foundry trace export is simpler and more direct.
 
 **Alternatives considered**:
 
-- Custom logging to a separate database: rejected because App Insights already captures the required telemetry.
-- Direct OpenTelemetry export to a file: rejected because it loses the correlation and aggregation capabilities of KQL.
+- Remaining with App Insights KQL: rejected because it introduces a secondary telemetry dependency; Foundry traces are first-class storage.
+- App Insights + Foundry hybrid: rejected as over-engineering; Foundry alone is sufficient.
+- No trace harvesting: rejected because real-world usage patterns are essential for representative evaluation datasets.
 
 ## R-004: Evaluator Phasing Strategy
 
@@ -49,13 +52,13 @@
 
 ## R-005: CI/CD Integration Pattern
 
-**Decision**: GitHub Actions workflow with two tiers: (1) PR gate running P0 subset (~50 prompts) using `azure-ai-evaluation` SDK locally, (2) nightly scheduled workflow running full suite (~200-500 prompts) via Foundry cloud batch eval.
+**Decision**: GitHub Actions workflow with two tiers: (1) PR gate running P0 subset (~50 prompts) using `azure-ai-evaluation` SDK locally, (2) nightly scheduled workflow running full suite (~200-500 prompts) in cloud mode using `python -m evaluations --cloud`.
 
-**Rationale**: PR gate must complete within a practical CI window. Running ~50 P0 prompts locally with the SDK avoids Foundry API latency for small datasets. The nightly run uses Foundry cloud batch eval for the full dataset, producing trend data and publishing results for weekly review. Threshold regressions in the PR gate fail the merge; nightly regressions open issues.
+**Rationale**: PR gate must complete within a practical CI window. Running ~50 P0 prompts locally with the SDK avoids Foundry API latency for small datasets. The nightly run uses Foundry cloud publishing for the full dataset, producing Foundry-native run records while still writing local summary artifacts. Threshold regressions in the PR gate fail the merge; nightly regressions open issues.
 
 **Alternatives considered**:
 
-- Cloud batch eval for both: rejected because PR gate would be too slow.
+- Cloud publish mode for both PR and nightly: rejected because PR gate would be too slow.
 - Local-only evaluation: rejected because Foundry result tracking and trending requires cloud runs.
 
 ## R-006: Custom Code Evaluator Design
@@ -71,9 +74,9 @@
 
 ## R-007: Custom Prompt Evaluator Design
 
-**Decision**: Implement custom prompt evaluators registered in Foundry evaluator catalog using `evaluator_catalog_create`. Business answer adequacy evaluator scores against per-query `expected_behavior` rubric (1-5 scale). Clarification quality evaluator scores whether clarification questions are single-question, minimally ambiguous, and actionable (boolean pass/fail).
+**Decision**: Implement custom prompt evaluators for local evaluation and keep catalog registration as a follow-on enhancement. Business answer adequacy evaluator scores against per-query `expected_behavior` rubric (1-5 scale). Clarification quality evaluator scores whether clarification questions are single-question, minimally ambiguous, and actionable (boolean pass/fail).
 
-**Rationale**: These dimensions require LLM judgment against domain-specific rubrics. The `expected_behavior` field in datasets provides per-query scoring context. Registering in Foundry catalog enables reuse across runs and environments.
+**Rationale**: These dimensions require LLM judgment against domain-specific rubrics. The `expected_behavior` field in datasets provides per-query scoring context. Cloud-mode evaluator mapping currently prioritizes built-in evaluators and deterministic custom-code evaluators, while prompt-evaluator catalog registration is deferred to reduce rollout risk.
 
 **Alternatives considered**:
 
