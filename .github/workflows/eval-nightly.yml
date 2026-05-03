@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
   issues: write
 
 jobs:
@@ -16,6 +17,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
