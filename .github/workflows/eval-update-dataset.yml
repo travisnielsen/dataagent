@@ -29,33 +29,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Provision datasets in Foundry (New API)
-        id: provision
-        continue-on-error: true
+      - name: Provision datasets in Foundry
         env:
           PYTHONPATH: src/backend
           AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT }}
         run: |
-          set -o pipefail
           uv run python -m evaluations.dataset_provisioner \
-            --datasets-dir src/backend/evaluations/datasets 2>&1 | tee provision.log
-
-      - name: Report versioning failure clearly
-        if: steps.provision.outcome == 'failure'
-        run: |
-          if grep -q "Bump the repo filename version and re-run provisioning" provision.log; then
-            echo "::error title=Immutable dataset version conflict::Dataset content changed, but the Foundry dataset version already exists. Rename the file to a new version such as cadence-eval-gold-v2.jsonl and push again."
-            {
-              echo "## Dataset Versioning Failure"
-              echo
-              echo "The dataset file content changed, but the versioned filename already exists in Foundry."
-              echo
-              echo "Required action: rename the file to a new version, for example \\`cadence-eval-gold-v2.jsonl\\`."
-              echo
-              echo "Provisioner output:"
-              echo '```text'
-              cat provision.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit 1
+            --datasets-dir src/backend/evaluations/datasets

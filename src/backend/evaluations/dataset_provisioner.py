@@ -1,9 +1,9 @@
 """Provision evaluation datasets into Foundry using New Foundry dataset APIs.
 
-This module treats dataset versions as immutable. Existing versions are
-reused only when the remote dataset bytes match the local file exactly.
-If content changes, callers must publish a new version by renaming the
-local file (for example ``cadence-eval-gold-v2.jsonl``).
+Version identity is determined by filename only (e.g. ``cadence-eval-gold-v1.jsonl``).
+If a Foundry dataset version with the same name already exists it is skipped.
+To publish updated content, rename the file to a new version
+(e.g. ``cadence-eval-gold-v2.jsonl``).
 """
 
 from __future__ import annotations
@@ -164,58 +164,6 @@ async def _create_dataset_version(
     create_response.raise_for_status()
 
 
-async def _get_dataset_blob_url(
-    *,
-    client: httpx.AsyncClient,
-    project_endpoint: str,
-    token: str,
-    dataset_name: str,
-    dataset_version: str,
-) -> str:
-    """Get a readable blob URL for an existing dataset version."""
-    response = await client.post(
-        f"{project_endpoint}/datasets/{dataset_name}/versions/{dataset_version}/credentials",
-        params={"api-version": _API_VERSION},
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        json={},
-    )
-    response.raise_for_status()
-    payload = response.json()
-    blob_uri = cast_required_str(payload, ["blobReferenceForConsumption", "blobUri"])
-    sas_uri = cast_required_str(payload, ["blobReferenceForConsumption", "credential", "sasUri"])
-    query = urlsplit(sas_uri).query
-    return urlunsplit((
-        urlsplit(blob_uri).scheme,
-        urlsplit(blob_uri).netloc,
-        urlsplit(blob_uri).path,
-        query,
-        "",
-    ))
-
-
-async def _dataset_content_matches(
-    *,
-    client: httpx.AsyncClient,
-    project_endpoint: str,
-    token: str,
-    dataset_file: DatasetFile,
-) -> bool:
-    """Check whether the remote dataset bytes match the local file bytes."""
-    blob_url = await _get_dataset_blob_url(
-        client=client,
-        project_endpoint=project_endpoint,
-        token=token,
-        dataset_name=dataset_file.dataset_name,
-        dataset_version=dataset_file.dataset_version,
-    )
-    response = await client.get(blob_url)
-    response.raise_for_status()
-    return response.content == dataset_file.path.read_bytes()
-
-
 def cast_required_str(payload: dict[str, Any], path: list[str]) -> str:
     """Extract a required nested string value from a payload."""
     current: Any = payload
@@ -288,23 +236,9 @@ async def sync_datasets(
                 dataset_version=parsed.dataset_version,
             )
             if exists:
-                matches_remote = await _dataset_content_matches(
-                    client=client,
-                    project_endpoint=normalized_endpoint,
-                    token=token,
-                    dataset_file=parsed,
-                )
-                if not matches_remote:
-                    msg = (
-                        "Dataset version already exists with different content: "
-                        f"{parsed.dataset_name}/{parsed.dataset_version}. "
-                        "Bump the repo filename version and re-run provisioning."
-                    )
-                    raise RuntimeError(msg)
-
                 summary.skipped_existing += 1
                 logger.info(
-                    "Dataset already exists with identical content; skipping: %s/%s",
+                    "Dataset version already exists in Foundry; skipping: %s/%s",
                     parsed.dataset_name,
                     parsed.dataset_version,
                 )
