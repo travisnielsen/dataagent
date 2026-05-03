@@ -190,12 +190,14 @@ PIPELINE_TARGETS: dict[str, list[str]] = {
 
 DEFAULT_THRESHOLDS: list[ThresholdRule] = [
     # Primary metrics (P0 — blocks merge)
-    ThresholdRule(metric="intent_resolution", min_score=0.85, priority="P0"),
+    # Foundry built-in evaluators return 0-5 scale: threshold 3.0 = "good" (≥60%)
+    ThresholdRule(metric="intent_resolution", min_score=3.0, priority="P0"),
     ThresholdRule(metric="sql_safety", min_score=0.95, priority="P0"),
-    ThresholdRule(metric="relevance", min_score=0.75, priority="P0"),
+    ThresholdRule(metric="relevance", min_score=3.0, priority="P0"),
     ThresholdRule(metric="answer_adequacy", min_score=3.0, priority="P0"),
     # Secondary metrics (P1 — warns)
     ThresholdRule(metric="tool_call_accuracy", min_score=0.80, priority="P1"),
+    # task_adherence returns 0-1 scale
     ThresholdRule(metric="task_adherence", min_score=0.80, priority="P1"),
     ThresholdRule(metric="clarification_quality", min_score=0.80, priority="P1"),
     ThresholdRule(metric="param_extraction_correctness", min_score=0.75, priority="P1"),

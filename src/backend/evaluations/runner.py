@@ -14,7 +14,7 @@ import uuid
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from evaluations.config import DEFAULT_THRESHOLDS, EvaluationConfig
 from evaluations.models import (
@@ -367,11 +367,10 @@ async def run_cloud_evaluation(
     branch: str | None = None,
     correlation_id: str | None = None,
 ) -> tuple[EvaluationRun, RunSummary | None]:
-    """Submit evaluation to Foundry cloud using modern evaluate() API.
+    """Submit evaluation to Foundry cloud using native Foundry REST APIs.
 
-    Uses the modern ``azure.ai.evaluation.evaluate()`` function which automatically
-    submits to Foundry when ``azure_ai_project`` is provided. Results appear in
-    the new Foundry portal. Falls back to local evaluation if cloud submission fails.
+    Creates an evaluation definition and submits an async run on an existing
+    Foundry dataset. Falls back to local evaluation if cloud submission fails.
 
     Args:
         dataset_path: Path to JSONL dataset.
@@ -384,7 +383,8 @@ async def run_cloud_evaluation(
 
     Returns:
         Tuple of ``(EvaluationRun, RunSummary | None)``.
-        Summary is None if the cloud run is async and needs polling.
+        For async cloud runs, returns a placeholder summary because metrics are
+        not immediately available.
     """
     run_id = uuid.uuid4().hex[:12]
     started_at = datetime.now(UTC).isoformat()
@@ -416,7 +416,7 @@ async def run_cloud_evaluation(
 
     records = load_dataset(dataset_path)
     logger.info(
-        "Submitting Foundry evaluation via modern evaluate() API: %d records, %d evaluators",
+        "Submitting Foundry evaluation via native REST API: %d records, %d evaluators",
         len(records),
         len(evaluator_names),
     )
@@ -439,42 +439,73 @@ async def run_cloud_evaluation(
             branch=branch,
         )
 
-    # Extract metrics from Foundry result
-    metrics_result = result.get("metrics", {})
-    if not isinstance(metrics_result, dict):
-        metrics_result = {}
-    metrics = _build_metric_results_from_foundry(
-        metrics_payload=metrics_result,
+    eval_id = result.get("eval_id")
+    run_submission_id = result.get("run_id")
+    dataset_id = result.get("dataset_id")
+    submission_status = result.get("status")
+
+    if isinstance(eval_id, str):
+        run.eval_id = eval_id
+
+    logger.info(
+        "Foundry evaluation submitted asynchronously: eval_id=%s run_id=%s dataset_id=%s status=%s",
+        eval_id,
+        run_submission_id,
+        dataset_id,
+        submission_status,
+    )
+
+    if not isinstance(eval_id, str) or not isinstance(run_submission_id, str):
+        logger.warning("Cloud run identifiers are incomplete; returning submission-only summary")
+        run.status = "completed"
+        run.completed_at = datetime.now(UTC).isoformat()
+        return run, RunSummary(
+            run_id=run_id,
+            metrics=[],
+            total_records=len(records),
+            total_passed=0,
+            total_failed=0,
+            overall_pass=False,
+            failure_count_by_cluster={},
+        )
+
+    cloud_result = await _poll_cloud_evaluation_result(
+        config=config,
+        eval_id=eval_id,
+        run_id=run_submission_id,
+    )
+
+    output_items = cast(list[object], cloud_result["output_items"])
+    total_passed = cast(int, cloud_result["total_passed"])
+    total_failed = cast(int, cloud_result["total_failed"])
+
+    metrics = _build_metric_results_from_cloud_output(
+        output_items=output_items,
         thresholds={t.metric: t.min_score for t in config.thresholds},
     )
 
-    overall_pass = all(
-        metric.passed is True
-        for metric in metrics
-        if any(t.metric == metric.metric and t.priority == "P0" for t in config.thresholds)
-    )
+    total_records = len(output_items)
 
-    run.status = "completed"
+    p0_thresholds = {t.metric for t in config.thresholds if t.priority == "P0"}
+    p0_metrics = [m for m in metrics if m.metric in p0_thresholds]
+    overall_pass = bool(p0_metrics) and all(m.passed is True for m in p0_metrics)
+
+    run.status = "completed" if cloud_result["status"] == "completed" else "failed"
     run.completed_at = datetime.now(UTC).isoformat()
-    # Studio URL is available in result if Foundry provides it
-    studio_url = result.get("studio_url")
-    run.eval_id = studio_url if isinstance(studio_url, str) else None
 
-    summary = RunSummary(
+    return run, RunSummary(
         run_id=run_id,
         metrics=metrics,
-        total_records=len(records),
-        total_passed=len(records) if overall_pass else 0,
-        total_failed=0 if overall_pass else len(records),
+        total_records=total_records,
+        total_passed=total_passed,
+        total_failed=total_failed,
         overall_pass=overall_pass,
         failure_count_by_cluster={},
     )
 
-    return run, summary
-
 
 # ---------------------------------------------------------------------------
-# Cloud evaluation submission using modern evaluate() API
+# Cloud evaluation submission using Foundry REST API
 # ---------------------------------------------------------------------------
 
 
@@ -485,14 +516,12 @@ async def _submit_cloud_evaluation(
     run_id: str,
     trigger: str,
 ) -> dict[str, object]:
-    """Submit evaluation to Foundry using modern evaluate() API.
+    """Submit evaluation to Foundry using native REST endpoints.
 
-    Uses the ``azure.ai.evaluation.evaluate()`` function which automatically
-    submits to Foundry when ``azure_ai_project`` is provided. Results appear
-    in the new Foundry portal.
-
-    References an existing Foundry dataset by name and version instead of
-    uploading a local file.
+    Flow:
+    1. Retrieve an existing Foundry dataset asset by name/version.
+    2. Create an eval definition via ``POST /openai/v1/evals``.
+    3. Submit an async eval run via ``POST /openai/v1/evals/{eval_id}/runs``.
 
     Args:
         evaluator_names: Which evaluators to invoke.
@@ -501,94 +530,62 @@ async def _submit_cloud_evaluation(
         trigger: What triggered this run.
 
     Returns:
-        Result dictionary with metrics extracted from evaluation output.
+        Submission details with async run identifiers.
 
     Raises:
-        ImportError: If azure-ai-evaluation SDK is unavailable.
-        RuntimeError: If cloud evaluation submission fails.
-    """
-    try:
-        from azure.ai.evaluation import evaluate  # noqa: PLC0415
-    except ImportError as e:
-        msg = f"Required SDK not available for cloud evaluation: {e}"
-        raise ImportError(msg) from e
-
-    try:
-        # Build evaluators dict for evaluate() function
-        evaluators = _build_foundry_evaluators(evaluator_names, config)
-
-        if not evaluators:
-            msg = f"No valid evaluators could be built from: {evaluator_names}"
-            raise RuntimeError(msg)
-
-        # Get the Foundry dataset reference instead of using local file
-        dataset_uri = await _get_foundry_dataset_uri(
-            config=config,
-            dataset_name=config.dataset_name,
-            dataset_version=config.dataset_version,
-        )
-
-        logger.info(
-            "Calling evaluate() with %d evaluators, Foundry dataset: %s",
-            len(evaluators),
-            dataset_uri,
-        )
-
-        # Submit to Foundry using modern evaluate() API
-        # When azure_ai_project is provided, results are sent to Foundry
-        result = await asyncio.to_thread(
-            evaluate,
-            data=dataset_uri,
-            evaluators=evaluators,
-            evaluation_name=f"cadence-{trigger}-{run_id}",
-            azure_ai_project=config.project_endpoint,
-            tags={
-                "run_id": run_id,
-                "dataset_version": config.dataset_version,
-                "trigger": trigger,
-            },
-        )
-    except Exception as e:
-        msg = f"Cloud evaluation via evaluate() failed: {e}"
-        logger.error(msg, exc_info=True)
-        raise RuntimeError(msg) from e
-    else:
-        logger.info("Cloud evaluation submitted successfully to Foundry")
-
-        # Extract metrics from result (EvaluationResult TypedDict)
-        metrics: dict[str, object] = result.get("metrics", {})  # type: ignore[union-attr]
-
-        return {
-            "metrics": metrics,
-            "studio_url": None,  # Foundry will provide this in the portal
-        }
-
-
-async def _get_foundry_dataset_uri(
-    *,
-    config: EvaluationConfig,
-    dataset_name: str,
-    dataset_version: str,
-) -> str:
-    """Retrieve the data_uri for an existing Foundry dataset.
-
-    Args:
-        config: Evaluation configuration with project_endpoint.
-        dataset_name: Name of the dataset in Foundry.
-        dataset_version: Version of the dataset (e.g., 'v1').
-
-    Returns:
-        The data_uri string for the Foundry dataset.
-
-    Raises:
-        RuntimeError: If dataset cannot be retrieved.
+        ImportError: If required Foundry SDK modules are unavailable.
+        RuntimeError: If dataset lookup or run submission fails.
     """
     try:
         from azure.ai.projects import AIProjectClient  # noqa: PLC0415
         from azure.identity import DefaultAzureCredential  # noqa: PLC0415
     except ImportError as e:
-        msg = f"Required SDK not available: {e}"
+        msg = f"Required SDK not available for cloud evaluation: {e}"
         raise ImportError(msg) from e
+
+    eval_name = f"cadence-{trigger}-{run_id}"
+    run_display_name = f"cadence-eval-{trigger}-{run_id}"
+
+    # Foundry currently supports a subset of built-in evaluators for native async runs.
+    supported_built_in_evaluators = {
+        "intent_resolution",
+        "task_adherence",
+        "relevance",
+        "tool_call_accuracy",
+        "indirect_attack",
+    }
+
+    testing_criteria_payload: list[dict[str, object]] = []
+    unsupported_evaluators: list[str] = []
+    for evaluator_name in evaluator_names:
+        if evaluator_name not in supported_built_in_evaluators:
+            unsupported_evaluators.append(evaluator_name)
+            continue
+        testing_criteria_payload.append({
+            "type": "azure_ai_evaluator",
+            "name": evaluator_name,
+            "evaluator_name": f"builtin.{evaluator_name}",
+            "initialization_parameters": {
+                "deployment_name": config.judge_model_deployment,
+            },
+            "data_mapping": {
+                "query": "{{item.query}}",
+                "response": "{{item.expected_behavior}}",
+            },
+        })
+
+    if not testing_criteria_payload:
+        msg = (
+            "No supported cloud evaluators were selected. Supported evaluators: "
+            f"{', '.join(sorted(supported_built_in_evaluators))}. Requested: {', '.join(evaluator_names)}"
+        )
+        raise RuntimeError(msg)
+
+    if unsupported_evaluators:
+        logger.warning(
+            "Skipping unsupported cloud evaluators: %s",
+            ", ".join(sorted(unsupported_evaluators)),
+        )
 
     credential = DefaultAzureCredential()
     client = AIProjectClient(
@@ -597,144 +594,299 @@ async def _get_foundry_dataset_uri(
     )
 
     try:
-        logger.info("Retrieving Foundry dataset: %s/%s", dataset_name, dataset_version)
-
-        # Get the dataset version from Foundry
-        dataset_version_obj = await asyncio.to_thread(
-            client.datasets.get,
-            name=dataset_name,
-            version=dataset_version,
+        logger.info(
+            "Submitting Foundry REST evaluation: dataset=%s/%s evaluators=%d",
+            config.dataset_name,
+            config.dataset_version,
+            len(evaluator_names),
         )
 
-        data_uri = dataset_version_obj.data_uri
+        # Resolve existing Foundry dataset asset.
+        dataset_version_obj = await asyncio.to_thread(
+            client.datasets.get,
+            name=config.dataset_name,
+            version=config.dataset_version,
+        )
+        dataset_id = getattr(dataset_version_obj, "id", None)
+        if not isinstance(dataset_id, str) or not dataset_id:
+            msg = (
+                "Foundry dataset lookup did not return a valid dataset id for "
+                f"{config.dataset_name}/{config.dataset_version}"
+            )
+            raise RuntimeError(msg)
+
+        openai_client = client.get_openai_client()
+
+        eval_object = await asyncio.to_thread(
+            openai_client.evals.create,
+            name=eval_name,
+            data_source_config={
+                "type": "custom",
+                "item_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "expected_behavior": {"type": "string"},
+                        "context": {"type": ["string", "null"]},
+                        "ground_truth_sql": {"type": ["string", "null"]},
+                        "ground_truth_params": {
+                            "anyOf": [
+                                {"type": "object", "additionalProperties": True},
+                                {"type": "null"},
+                            ]
+                        },
+                        "conversation": {
+                            "anyOf": [
+                                {"type": "array", "items": {"type": "object"}},
+                                {"type": "null"},
+                            ]
+                        },
+                    },
+                    "required": ["query", "expected_behavior"],
+                    "additionalProperties": True,
+                },
+            },
+            testing_criteria=cast(Any, testing_criteria_payload),
+            metadata={
+                "trigger": trigger,
+                "run_id": run_id,
+                "dataset_name": config.dataset_name,
+                "dataset_version": config.dataset_version,
+            },
+        )
+
+        eval_id = getattr(eval_object, "id", None)
+        if not isinstance(eval_id, str) or not eval_id:
+            msg = f"Create eval response missing id: {eval_object}"
+            raise RuntimeError(msg)
+
+        eval_run = await asyncio.to_thread(
+            openai_client.evals.runs.create,
+            eval_id=eval_id,
+            name=run_display_name,
+            data_source={
+                "type": "jsonl",
+                "source": {
+                    "type": "file_id",
+                    "id": dataset_id,
+                },
+            },
+            metadata={
+                "trigger": trigger,
+                "run_id": run_id,
+                "is_foundry_eval": "true",
+                "evaluator_names": ",".join(evaluator_names),
+            },
+        )
+
+        run_submission_id = getattr(eval_run, "id", None)
+        if not isinstance(run_submission_id, str) or not run_submission_id:
+            msg = f"Submit eval run response missing id: {eval_run}"
+            raise RuntimeError(msg)
+
+        status = getattr(eval_run, "status", None)
+        if not isinstance(status, str) or not status:
+            status = "submitted"
+
     except Exception as e:
-        msg = f"Failed to retrieve Foundry dataset {dataset_name}/{dataset_version}: {e}"
+        msg = f"Cloud evaluation via Foundry REST API failed: {e}"
         logger.error(msg, exc_info=True)
         raise RuntimeError(msg) from e
     else:
-        logger.info("Retrieved Foundry dataset URI: %s", data_uri)
-        return data_uri
+        return {
+            "eval_id": eval_id,
+            "run_id": run_submission_id,
+            "dataset_id": dataset_id,
+            "status": status,
+        }
     finally:
-        client.close()
+        await asyncio.to_thread(client.close)
 
 
-def _build_foundry_evaluators(
-    evaluator_names: list[str],
+async def _poll_cloud_evaluation_result(
+    *,
     config: EvaluationConfig,
-) -> dict[str, Any]:
-    """Build evaluator callables for ``azure.ai.evaluation.evaluate``.
+    eval_id: str,
+    run_id: str,
+    timeout_seconds: int = 600,
+    poll_interval_seconds: int = 5,
+) -> dict[str, object]:
+    """Poll a Foundry evaluation run until terminal status and collect output items.
 
     Args:
-        evaluator_names: Evaluator names requested for this run.
         config: Evaluation configuration.
+        eval_id: Foundry evaluation definition id.
+        run_id: Foundry evaluation run id.
+        timeout_seconds: Max seconds to wait for terminal status.
+        poll_interval_seconds: Poll interval in seconds.
 
     Returns:
-        Evaluator mapping consumable by ``evaluate``.
+        Dictionary with run status, output items, and per-record pass/fail counts.
+
+    Raises:
+        RuntimeError: If polling times out or run ends in a non-completed status.
     """
-    from azure.ai.evaluation import (  # noqa: PLC0415
-        IndirectAttackEvaluator,
-        IntentResolutionEvaluator,
-        RelevanceEvaluator,
-        TaskAdherenceEvaluator,
-        ToolCallAccuracyEvaluator,
+    try:
+        from azure.ai.projects import AIProjectClient  # noqa: PLC0415
+        from azure.identity import DefaultAzureCredential  # noqa: PLC0415
+    except ImportError as e:
+        msg = f"Required SDK not available for cloud polling: {e}"
+        raise ImportError(msg) from e
+
+    client = AIProjectClient(
+        endpoint=config.project_endpoint,
+        credential=DefaultAzureCredential(),
     )
 
-    # When using cloud evaluation with azure_ai_project, use minimal model_config.
-    # The evaluate() function will handle credential-based auth automatically.
-    # Extract endpoint without /api/projects/... part
-    endpoint = _derive_foundry_host_endpoint(config.project_endpoint)
+    try:
+        openai_client = client.get_openai_client()
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        status: str | None = None
 
-    model_config: dict[str, object] = {
-        "type": "azure_openai",
-        "azure_endpoint": endpoint,
-        "azure_deployment": config.judge_model_deployment,
-    }
+        while asyncio.get_running_loop().time() < deadline:
+            run_obj = await asyncio.to_thread(
+                openai_client.evals.runs.retrieve,
+                eval_id=eval_id,
+                run_id=run_id,
+            )
+            status_candidate = getattr(run_obj, "status", None)
+            if isinstance(status_candidate, str):
+                status = status_candidate
 
-    evaluators: dict[str, Any] = {}
-    for name in evaluator_names:
-        if name == "intent_resolution":
-            evaluators[name] = IntentResolutionEvaluator(model_config=model_config)
+            if status in {"completed", "failed", "cancelled"}:
+                break
+
+            await asyncio.sleep(poll_interval_seconds)
+
+        if status not in {"completed", "failed", "cancelled"}:
+            msg = (
+                f"Timed out waiting for Foundry run completion: eval_id={eval_id} "
+                f"run_id={run_id} last_status={status}"
+            )
+            raise RuntimeError(msg)
+
+        output_items = await asyncio.to_thread(
+            lambda: list(
+                openai_client.evals.runs.output_items.list(eval_id=eval_id, run_id=run_id)
+            ),
+        )
+
+        total_passed = 0
+        total_failed = 0
+        for item in output_items:
+            item_results = getattr(item, "results", None)
+            if not isinstance(item_results, list) or not item_results:
+                continue
+
+            saw_explicit_failure = False
+            saw_explicit_pass = False
+            for result in item_results:
+                passed = getattr(result, "passed", None)
+                if isinstance(passed, bool):
+                    if passed:
+                        saw_explicit_pass = True
+                    else:
+                        saw_explicit_failure = True
+                    continue
+
+                sample_payload = getattr(result, "sample", None)
+                if isinstance(sample_payload, dict) and sample_payload.get("error"):
+                    saw_explicit_failure = True
+
+            if saw_explicit_failure:
+                total_failed += 1
+            elif saw_explicit_pass:
+                total_passed += 1
+
+        return {
+            "status": status,
+            "output_items": output_items,
+            "total_passed": total_passed,
+            "total_failed": total_failed,
+        }
+    finally:
+        await asyncio.to_thread(client.close)
+
+
+def _build_metric_results_from_cloud_output(
+    *,
+    output_items: list[object],
+    thresholds: dict[str, float],
+) -> list[MetricResult]:
+    """Aggregate metric results from Foundry cloud output items.
+
+    Args:
+        output_items: Output items returned by Foundry run output list API.
+        thresholds: Threshold lookup by metric name.
+
+    Returns:
+        Aggregated metric results.
+    """
+    scores_by_metric: dict[str, list[float]] = {}
+    pass_by_metric: dict[str, list[float]] = {}
+    error_by_metric: dict[str, int] = {}
+
+    for item in output_items:
+        item_results = getattr(item, "results", None)
+        if not isinstance(item_results, list):
             continue
 
-        if name == "task_adherence":
-            evaluators[name] = TaskAdherenceEvaluator(model_config=model_config)
-            continue
+        for result in item_results:
+            metric_name = getattr(result, "name", None) or getattr(result, "metric", None)
+            if not isinstance(metric_name, str) or not metric_name:
+                continue
 
-        if name == "tool_call_accuracy":
-            evaluators[name] = ToolCallAccuracyEvaluator(model_config=model_config)
-            continue
+            score = getattr(result, "score", None)
+            if isinstance(score, (int, float)):
+                scores_by_metric.setdefault(metric_name, []).append(float(score))
 
-        if name == "relevance":
-            evaluators[name] = RelevanceEvaluator(model_config=model_config)
-            continue
+            passed = getattr(result, "passed", None)
+            if isinstance(passed, bool):
+                pass_by_metric.setdefault(metric_name, []).append(1.0 if passed else 0.0)
+                continue
 
-        if name == "indirect_attack":
-            # IndirectAttackEvaluator handles authentication through azure_ai_project
-            # in the evaluate() function context
-            evaluators[name] = IndirectAttackEvaluator(
-                credential=None,
-                azure_ai_project=config.project_endpoint,
+            sample_payload = getattr(result, "sample", None)
+            if isinstance(sample_payload, dict) and sample_payload.get("error"):
+                error_by_metric[metric_name] = error_by_metric.get(metric_name, 0) + 1
+
+    metric_results: list[MetricResult] = []
+    all_metric_names = set(scores_by_metric) | set(pass_by_metric) | set(error_by_metric)
+    for metric_name in sorted(all_metric_names):
+        numeric_scores = scores_by_metric.get(metric_name, [])
+        if numeric_scores:
+            metric_results.append(
+                _aggregate_metric(
+                    metric_name,
+                    numeric_scores,
+                    thresholds.get(metric_name),
+                )
             )
             continue
 
-        if name == "sql_safety":
-            evaluators[name] = _sql_safety_adapter
+        # Some evaluators may not return numeric score but do return pass/fail.
+        pass_scores = pass_by_metric.get(metric_name, [])
+        if pass_scores:
+            metric_results.append(
+                _aggregate_metric(
+                    metric_name,
+                    pass_scores,
+                    thresholds.get(metric_name),
+                )
+            )
             continue
 
-        if name == "param_extraction_correctness":
-            evaluators[name] = _param_extraction_adapter
-            continue
+        # If all samples errored for a metric, force an aggregate failure metric.
+        error_count = error_by_metric.get(metric_name, 0)
+        if error_count > 0:
+            metric_results.append(
+                _aggregate_metric(
+                    metric_name,
+                    [0.0] * error_count,
+                    thresholds.get(metric_name),
+                )
+            )
 
-        logger.warning("Evaluator %s is unsupported for Foundry cloud runs", name)
-
-    return evaluators
-
-
-def _derive_foundry_host_endpoint(project_endpoint: str) -> str:
-    """Extract host endpoint from project endpoint URL.
-
-    Example:
-        ``https://x.services.ai.azure.com/api/projects/cadence``
-        -> ``https://x.services.ai.azure.com``
-
-    Args:
-        project_endpoint: Full Foundry project endpoint.
-
-    Returns:
-        Host-level endpoint.
-    """
-    marker = "/api/projects/"
-    if marker in project_endpoint:
-        return project_endpoint.split(marker, maxsplit=1)[0]
-    return project_endpoint
-
-
-def _sql_safety_adapter(
-    *,
-    query: str,
-    ground_truth_sql: str | None = None,
-    **_: object,
-) -> dict[str, float]:
-    """Adapter exposing SQL safety evaluator to Foundry evaluate()."""
-    from evaluations.evaluators.sql_safety import evaluate_sql_safety  # noqa: PLC0415
-
-    score = evaluate_sql_safety(query=query, sql=ground_truth_sql or "")
-    return {"score": float(score)}
-
-
-def _param_extraction_adapter(
-    *,
-    ground_truth_params: dict[str, Any] | None = None,
-    **_: object,
-) -> dict[str, float]:
-    """Adapter exposing parameter extraction evaluator to Foundry evaluate()."""
-    from evaluations.evaluators.param_extraction import evaluate_param_extraction  # noqa: PLC0415
-
-    score = evaluate_param_extraction(
-        extracted_params={},
-        expected_params=ground_truth_params or {},
-    )
-    return {"score": float(score)}
+    return metric_results
 
 
 def _build_metric_results_from_foundry(
@@ -744,8 +896,11 @@ def _build_metric_results_from_foundry(
 ) -> list[MetricResult]:
     """Transform Foundry metric payload into project MetricResult models.
 
+    This helper is kept for future polling support when async cloud runs
+    return final metric payloads.
+
     Args:
-        metrics_payload: Metrics returned from ``evaluate``.
+        metrics_payload: Metrics returned from Foundry.
         thresholds: Threshold lookup by metric/evaluator name.
 
     Returns:

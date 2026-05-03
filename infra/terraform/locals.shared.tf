@@ -1,6 +1,10 @@
 locals {
   acr_is_private = var.acr_build_mode == "private"
 
+  # Model deployment name used for evaluations and API judge models
+  # Must match one of the deployed models in ai-platform.tf
+  evaluation_model_deployment_name = azapi_resource.ai_model_deployment_gpt52.name
+
   github_federated_principal_object_id = var.github_federated_principal_object_id == null ? "" : trimspace(var.github_federated_principal_object_id)
   github_federated_principal_client_id = var.github_federated_principal_client_id == null ? "" : trimspace(var.github_federated_principal_client_id)
   azure_ad_allowed_tenant_ids = distinct(compact(concat(
