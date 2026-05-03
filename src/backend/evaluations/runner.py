@@ -1,7 +1,14 @@
-"""Evaluation runner — dataset loading, evaluator orchestration, result aggregation.
+"""Evaluation runner — orchestration of Foundry native REST API evaluations.
 
-Provides ``load_dataset()``, ``validate_dataset()``, ``run_evaluation()``,
-``run_cloud_evaluation()``, and quality gate computation.
+IMPORTANT: This module implements ONLY Foundry native REST API evaluation.
+There is NO local evaluation, NO fallback paths, NO azure-ai-evaluation SDK usage.
+
+Official evaluation method: ``run_cloud_evaluation()`` using Azure AI Projects SDK.
+
+See README.md and specs/005-foundry-evaluations/spec.md for architectural decision.
+
+Provides ``load_dataset()``, ``validate_dataset()``, ``run_cloud_evaluation()``,
+and quality gate computation.
 """
 
 from __future__ import annotations
@@ -369,16 +376,24 @@ async def run_cloud_evaluation(
 ) -> tuple[EvaluationRun, RunSummary | None]:
     """Submit evaluation to Foundry cloud using native Foundry REST APIs.
 
-    Creates an evaluation definition and submits an async run on an existing
-    Foundry dataset. Falls back to local evaluation if cloud submission fails.
+    This is the OFFICIAL and ONLY method for evaluation execution in this repository.
+
+    Uses Azure AI Projects SDK to:
+    1. Retrieve an existing Foundry dataset asset by name/version
+    2. Create an eval definition via POST /openai/v1/evals
+    3. Submit an async eval run via POST /openai/v1/evals/{eval_id}/runs
+    4. Poll for results via GET /openai/v1/evals/{eval_id}/runs/{run_id}
+
+    NO FALLBACK: If cloud submission fails, raises RuntimeError immediately.
+    NO LOCAL EVALUATION: Local evaluators are not used in production workflows.
 
     Args:
         dataset_path: Path to JSONL dataset.
-        evaluator_names: Which evaluators to invoke.
-        config: Evaluation configuration.
-        trigger: What triggered this run.
-        git_sha: Optional commit SHA.
-        branch: Optional branch name.
+        evaluator_names: Which evaluators to invoke (Foundry built-in only).
+        config: Evaluation configuration (project endpoint, dataset name, etc.).
+        trigger: What triggered this run (e.g., "nightly", "manual").
+        git_sha: Optional commit SHA for traceability.
+        branch: Optional branch name for traceability.
         correlation_id: Optional App Insights correlation ID.
 
     Returns:

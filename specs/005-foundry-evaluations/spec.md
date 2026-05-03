@@ -7,12 +7,75 @@
 
 ## Change Log
 
+### 2026-05-03
+
+- **ARCHITECTURAL DECISION**: Removed all local evaluation fallback paths from CI. **ONLY** the Foundry native REST API method is now supported in this repository.
+- Evaluations are **EXCLUSIVELY** executed via `run_cloud_evaluation()` in `src/backend/evaluations/runner.py` using Azure AI Foundry native REST endpoints.
+- Local evaluators and `azure-ai-evaluation` SDK are **NOT** used in CI or production evaluation workflows.
+- This decision simplifies CI complexity and ensures single evaluation path and reproducibility.
+
 ### 2026-05-02
 
 - Aligned specification language with the implemented Foundry-native cloud evaluation flow.
 - Clarified that nightly evaluations run in cloud mode and are expected to appear in Foundry Evaluations.
 - Added explicit requirement for Foundry run linkage visibility to operators (Studio URL/ID exposure).
 - Updated wording to reflect current `azure-ai-evaluation` cloud publishing path and removed stale batch API assumptions.
+
+## Architectural Decision: Foundry Native REST API Only
+
+**Effective**: 2026-05-03
+**Status**: Final (no fallback, no alternatives)
+
+This specification and all implementing code use **ONLY** the Foundry native REST API for evaluation execution. This is the single and only method for running evaluations in this repository.
+
+### Method: `run_cloud_evaluation()` via Foundry Native REST APIs
+
+All evaluations are executed using:
+
+1. **Azure AI Projects SDK** (`azure.ai.projects.AIProjectClient`)
+2. **DefaultAzureCredential** for authentication
+3. **Foundry REST Endpoints**:
+   - `POST /openai/v1/evals` - Create evaluation definition
+   - `POST /openai/v1/evals/{eval_id}/runs` - Submit async evaluation run
+   - `GET /openai/v1/evals/{eval_id}/runs/{run_id}` - Poll for results
+
+### Supported Evaluators (Built-In Only)
+
+The following Foundry-built-in evaluators are supported. Local evaluators are **NOT** supported in CI.
+
+- `intent_resolution` (0-5 scale)
+- `task_adherence` (0-1 scale)
+- `relevance` (0-5 scale)
+- `tool_call_accuracy` (0-1 scale)
+- `indirect_attack` (0-1 scale)
+
+### CI/CD Policy
+
+- **PR Gate**: ❌ Removed entirely (commit cdf5b10)
+- **Nightly Schedule**: ✅ Enabled (`eval-nightly.yml`) — ONLY Foundry REST API
+- **Local Development**: ✅ Supported via `python -m evaluations run --cloud`
+- **Local Fallback**: ❌ **NOT SUPPORTED** — If Foundry is unavailable, evaluation fails fast
+- **Azure-AI-Evaluation SDK**: Not used in production code paths
+
+### Rationale
+
+1. **Single Source of Truth**: One evaluation path = one implementation = consistent results
+2. **Cloud Native**: Evaluations run in Foundry, visible in Foundry Studio, queryable via REST APIs
+3. **Reduced CI Complexity**: No fallback logic, no test collection failures, no dual-path maintenance
+4. **Future Proof**: If changes are needed, they will be explicit and controlled
+
+### Change Process
+
+To modify evaluation strategy in the future:
+
+1. Open an issue proposing the change
+2. Update this architectural decision section
+3. Update `src/backend/evaluations/runner.py` implementation
+4. Update CI workflows (`eval-nightly.yml`)
+5. Commit with `feat(evals):` prefix
+6. Update spec changelog
+
+**Any local evaluator use or fallback paths introduced after 2026-05-03 require explicit approval and a new architectural decision.**
 
 ## User Scenarios & Testing *(mandatory)*
 
