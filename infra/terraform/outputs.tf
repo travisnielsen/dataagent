@@ -102,6 +102,16 @@ output "container_app_identity_name" {
   value       = azurerm_user_assigned_identity.api_identity.name
 }
 
+output "github_runner_identity_name" {
+  description = "Private GitHub runner managed identity name"
+  value       = azurerm_user_assigned_identity.github_runner.name
+}
+
+output "github_runner_identity_principal_id" {
+  description = "Private GitHub runner managed identity principal ID"
+  value       = azurerm_user_assigned_identity.github_runner.principal_id
+}
+
 output "container_registry_login_server" {
   description = "Container Registry login server"
   value       = module.container_registry.resource.login_server

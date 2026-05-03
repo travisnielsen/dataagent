@@ -65,3 +65,32 @@ resource "azurerm_role_assignment" "github_federated_rg_user_access_admin" {
   role_definition_name = "User Access Administrator"
   principal_id         = local.github_federated_rbac_principal_object_id
 }
+
+resource "azurerm_role_assignment" "github_federated_ai_foundry_user" {
+  count = local.github_federated_rbac_principal_object_id != "" ? 1 : 0
+
+  scope                = module.ai_foundry.ai_foundry_project_id["cadence"]
+  role_definition_name = "Azure AI User"
+  principal_id         = local.github_federated_rbac_principal_object_id
+}
+
+resource "time_sleep" "github_runner_identity_propagation" {
+  depends_on      = [azurerm_user_assigned_identity.github_runner]
+  create_duration = "30s"
+}
+
+resource "azurerm_role_assignment" "github_runner_acr_pull" {
+  scope                = module.container_registry.resource_id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.github_runner.principal_id
+
+  depends_on = [time_sleep.github_runner_identity_propagation]
+}
+
+resource "azurerm_role_assignment" "github_runner_ai_foundry_user" {
+  scope                = module.ai_foundry.ai_foundry_project_id["cadence"]
+  role_definition_name = "Azure AI User"
+  principal_id         = azurerm_user_assigned_identity.github_runner.principal_id
+
+  depends_on = [time_sleep.github_runner_identity_propagation]
+}

@@ -31,7 +31,7 @@ resource "azurerm_windows_virtual_machine" "utility" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
+    storage_account_type = "Standard_LRS"
   }
 
   source_image_reference {
