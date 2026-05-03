@@ -194,3 +194,9 @@ variable "acr_build_mode" {
     error_message = "acr_build_mode must be either 'public' or 'private'."
   }
 }
+
+variable "foundry_eval_name" {
+  type        = string
+  default     = "cadence-eval-v1"
+  description = "Stable Foundry evaluation definition name reused across scheduled runs."
+}

@@ -172,6 +172,11 @@ output "ai_model_deployment_name" {
   value       = local.evaluation_model_deployment_name
 }
 
+output "foundry_eval_name" {
+  description = "Stable Foundry evaluation definition name for recurring evaluation runs"
+  value       = var.foundry_eval_name
+}
+
 output "sql_database_name" {
   description = "Azure SQL database name"
   value       = var.sql_database_name

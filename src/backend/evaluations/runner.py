@@ -16,9 +16,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import statistics
 import uuid
 from collections import Counter
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -34,6 +36,10 @@ from evaluations.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+_EVAL_LOOKUP_PAGE_SIZE = 100
+_EVAL_LOOKUP_MAX_PAGES = 10
+_DIAGNOSTIC_DETAIL_LIMIT = 5
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +530,7 @@ async def run_cloud_evaluation(
 # ---------------------------------------------------------------------------
 
 
-async def _submit_cloud_evaluation(
+async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
     *,
     evaluator_names: list[str],
     config: EvaluationConfig,
@@ -558,7 +564,8 @@ async def _submit_cloud_evaluation(
         msg = f"Required SDK not available for cloud evaluation: {e}"
         raise ImportError(msg) from e
 
-    eval_name = f"cadence-{trigger}-{run_id}"
+    configured_eval_name = os.getenv("AZURE_FOUNDRY_EVAL_NAME", "").strip()
+    eval_name = configured_eval_name or f"cadence-{trigger}-{run_id}"
     run_display_name = f"cadence-eval-{trigger}-{run_id}"
 
     # Foundry currently supports a subset of built-in evaluators for native async runs.
@@ -576,6 +583,14 @@ async def _submit_cloud_evaluation(
         if evaluator_name not in supported_built_in_evaluators:
             unsupported_evaluators.append(evaluator_name)
             continue
+
+        data_mapping: dict[str, str] = {
+            "query": "{{item.query}}",
+            "response": "{{item.expected_behavior}}",
+        }
+        if evaluator_name == "tool_call_accuracy":
+            data_mapping["tool_definitions"] = "{{item.tool_definitions}}"
+
         testing_criteria_payload.append({
             "type": "azure_ai_evaluator",
             "name": evaluator_name,
@@ -583,10 +598,7 @@ async def _submit_cloud_evaluation(
             "initialization_parameters": {
                 "deployment_name": config.judge_model_deployment,
             },
-            "data_mapping": {
-                "query": "{{item.query}}",
-                "response": "{{item.expected_behavior}}",
-            },
+            "data_mapping": data_mapping,
         })
 
     if not testing_criteria_payload:
@@ -632,48 +644,68 @@ async def _submit_cloud_evaluation(
 
         openai_client = client.get_openai_client()
 
-        eval_object = await asyncio.to_thread(
-            openai_client.evals.create,
-            name=eval_name,
-            data_source_config={
-                "type": "custom",
-                "item_schema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string"},
-                        "expected_behavior": {"type": "string"},
-                        "context": {"type": ["string", "null"]},
-                        "ground_truth_sql": {"type": ["string", "null"]},
-                        "ground_truth_params": {
-                            "anyOf": [
-                                {"type": "object", "additionalProperties": True},
-                                {"type": "null"},
-                            ]
-                        },
-                        "conversation": {
-                            "anyOf": [
-                                {"type": "array", "items": {"type": "object"}},
-                                {"type": "null"},
-                            ]
-                        },
-                    },
-                    "required": ["query", "expected_behavior"],
-                    "additionalProperties": True,
-                },
-            },
-            testing_criteria=cast(Any, testing_criteria_payload),
-            metadata={
-                "trigger": trigger,
-                "run_id": run_id,
-                "dataset_name": config.dataset_name,
-                "dataset_version": config.dataset_version,
-            },
-        )
+        eval_id: str | None = None
+        if configured_eval_name:
+            eval_id = await _find_existing_eval_id_by_name(
+                openai_client=openai_client,
+                eval_name=configured_eval_name,
+            )
+            if eval_id:
+                logger.info(
+                    "Reusing existing Foundry evaluation: name=%s id=%s",
+                    configured_eval_name,
+                    eval_id,
+                )
 
-        eval_id = getattr(eval_object, "id", None)
-        if not isinstance(eval_id, str) or not eval_id:
-            msg = f"Create eval response missing id: {eval_object}"
-            raise RuntimeError(msg)
+        if not eval_id:
+            eval_object = await asyncio.to_thread(
+                openai_client.evals.create,
+                name=eval_name,
+                data_source_config={
+                    "type": "custom",
+                    "item_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string"},
+                            "expected_behavior": {"type": "string"},
+                            "context": {"type": ["string", "null"]},
+                            "ground_truth_sql": {"type": ["string", "null"]},
+                            "ground_truth_params": {
+                                "anyOf": [
+                                    {"type": "object", "additionalProperties": True},
+                                    {"type": "null"},
+                                ]
+                            },
+                            "conversation": {
+                                "anyOf": [
+                                    {"type": "array", "items": {"type": "object"}},
+                                    {"type": "null"},
+                                ]
+                            },
+                        },
+                        "required": ["query", "expected_behavior"],
+                        "additionalProperties": True,
+                    },
+                },
+                testing_criteria=cast(Any, testing_criteria_payload),
+                metadata={
+                    "trigger": trigger,
+                    "run_id": run_id,
+                    "dataset_name": config.dataset_name,
+                    "dataset_version": config.dataset_version,
+                },
+            )
+
+            eval_id = getattr(eval_object, "id", None)
+            if not isinstance(eval_id, str) or not eval_id:
+                msg = f"Create eval response missing id: {eval_object}"
+                raise RuntimeError(msg)
+            if configured_eval_name:
+                logger.info(
+                    "Configured evaluation name did not exist; created: name=%s id=%s",
+                    configured_eval_name,
+                    eval_id,
+                )
 
         eval_run = await asyncio.to_thread(
             openai_client.evals.runs.create,
@@ -716,6 +748,60 @@ async def _submit_cloud_evaluation(
         }
     finally:
         await asyncio.to_thread(client.close)
+
+
+async def _find_existing_eval_id_by_name(*, openai_client: object, eval_name: str) -> str | None:
+    """Find the newest existing Foundry evaluation id by exact name match.
+
+    Args:
+        openai_client: Authenticated OpenAI client from AIProjectClient.
+        eval_name: Evaluation name to reuse.
+
+    Returns:
+        Evaluation id if found, otherwise None.
+    """
+    after: str | None = None
+    openai_client_dynamic = cast(Any, openai_client)
+    pages_checked = 0
+
+    while pages_checked < _EVAL_LOOKUP_MAX_PAGES:
+        list_kwargs: dict[str, object] = {
+            "limit": _EVAL_LOOKUP_PAGE_SIZE,
+            "order": "desc",
+            "order_by": "created_at",
+        }
+        if after:
+            list_kwargs["after"] = after
+
+        page = await asyncio.to_thread(openai_client_dynamic.evals.list, **list_kwargs)
+        pages_checked += 1
+
+        items = getattr(page, "data", None)
+        if not isinstance(items, list) or not items:
+            return None
+
+        for item in items:
+            item_name = getattr(item, "name", None)
+            item_id = getattr(item, "id", None)
+            if item_name == eval_name and isinstance(item_id, str) and item_id:
+                return item_id
+
+        has_more = bool(getattr(page, "has_more", False))
+        if not has_more:
+            return None
+
+        last_item = items[-1]
+        last_id = getattr(last_item, "id", None)
+        if not isinstance(last_id, str) or not last_id:
+            return None
+        after = last_id
+
+    logger.warning(
+        "Evaluation lookup exhausted page limit without match: name=%s pages=%d",
+        eval_name,
+        _EVAL_LOOKUP_MAX_PAGES,
+    )
+    return None
 
 
 async def _poll_cloud_evaluation_result(
@@ -786,6 +872,8 @@ async def _poll_cloud_evaluation_result(
             ),
         )
 
+        _log_cloud_evaluation_diagnostics(output_items=output_items)
+
         total_passed = 0
         total_failed = 0
         for item in output_items:
@@ -821,6 +909,170 @@ async def _poll_cloud_evaluation_result(
         }
     finally:
         await asyncio.to_thread(client.close)
+
+
+def _log_cloud_evaluation_diagnostics(  # noqa: C901, PLR0912
+    *,
+    output_items: Sequence[object],
+) -> None:
+    """Log per-item evaluator diagnostics for incomplete or failed cloud runs.
+
+    Args:
+        output_items: Output items returned by Foundry run output list API.
+    """
+    if not output_items:
+        return
+
+    metric_names_by_item: list[set[str]] = []
+    item_identifiers: list[str] = []
+    error_entries: list[tuple[str, str, str]] = []
+    metrics_with_results: set[str] = set()
+
+    for item_index, item in enumerate(output_items):
+        item_identifier = _extract_output_item_identifier(item=item, item_index=item_index)
+        item_identifiers.append(item_identifier)
+
+        item_results = getattr(item, "results", None)
+        if not isinstance(item_results, list):
+            metric_names_by_item.append(set())
+            continue
+
+        item_metric_names: set[str] = set()
+        for result in item_results:
+            metric_name = getattr(result, "name", None) or getattr(result, "metric", None)
+            if not isinstance(metric_name, str) or not metric_name:
+                continue
+
+            item_metric_names.add(metric_name)
+            metrics_with_results.add(metric_name)
+
+            sample_payload = getattr(result, "sample", None)
+            if isinstance(sample_payload, dict) and sample_payload.get("error"):
+                error_entries.append((
+                    item_identifier,
+                    metric_name,
+                    _format_sample_error(sample_payload["error"]),
+                ))
+
+        metric_names_by_item.append(item_metric_names)
+
+    if error_entries:
+        error_counts_by_metric = Counter(metric_name for _, metric_name, _ in error_entries)
+        logger.warning(
+            "Foundry evaluator item errors: total=%d by_metric=%s",
+            len(error_entries),
+            dict(sorted(error_counts_by_metric.items())),
+        )
+
+        first_error_by_metric: dict[str, tuple[str, str]] = {}
+        for item_identifier, metric_name, error_message in error_entries:
+            if metric_name not in first_error_by_metric:
+                first_error_by_metric[metric_name] = (item_identifier, error_message)
+
+        for metric_name in sorted(first_error_by_metric):
+            item_identifier, error_message = first_error_by_metric[metric_name]
+            logger.warning(
+                "Foundry evaluator representative error: metric=%s item=%s error=%s",
+                metric_name,
+                item_identifier,
+                error_message,
+            )
+
+        for item_identifier, metric_name, error_message in error_entries[:_DIAGNOSTIC_DETAIL_LIMIT]:
+            logger.warning(
+                "Foundry evaluator error: item=%s metric=%s error=%s",
+                item_identifier,
+                metric_name,
+                error_message,
+            )
+        if len(error_entries) > _DIAGNOSTIC_DETAIL_LIMIT:
+            logger.warning(
+                "Foundry evaluator error details truncated: showing %d of %d",
+                _DIAGNOSTIC_DETAIL_LIMIT,
+                len(error_entries),
+            )
+
+    if not metrics_with_results:
+        return
+
+    missing_metric_entries: list[tuple[str, list[str]]] = []
+    for item_identifier, metric_names in zip(item_identifiers, metric_names_by_item, strict=False):
+        missing_metrics = sorted(metrics_with_results - metric_names)
+        if missing_metrics:
+            missing_metric_entries.append((item_identifier, missing_metrics))
+
+    if missing_metric_entries:
+        missing_metric_counter: Counter[str] = Counter()
+        for _, missing_metrics in missing_metric_entries:
+            missing_metric_counter.update(missing_metrics)
+
+        logger.warning(
+            "Foundry evaluator missing metric results: items=%d/%d by_metric=%s",
+            len(missing_metric_entries),
+            len(output_items),
+            dict(sorted(missing_metric_counter.items())),
+        )
+        for item_identifier, missing_metrics in missing_metric_entries[:_DIAGNOSTIC_DETAIL_LIMIT]:
+            logger.warning(
+                "Foundry evaluator missing metrics: item=%s missing=%s",
+                item_identifier,
+                ",".join(missing_metrics),
+            )
+        if len(missing_metric_entries) > _DIAGNOSTIC_DETAIL_LIMIT:
+            logger.warning(
+                "Foundry missing-metric details truncated: showing %d of %d",
+                _DIAGNOSTIC_DETAIL_LIMIT,
+                len(missing_metric_entries),
+            )
+
+
+def _extract_output_item_identifier(*, item: object, item_index: int) -> str:
+    """Build a stable human-readable identifier for a Foundry output item.
+
+    Args:
+        item: Foundry output item object.
+        item_index: Zero-based index in the output list.
+
+    Returns:
+        Identifier string suitable for logs.
+    """
+    candidate_attrs = ["line_number", "lineNumber", "index", "id", "item_id"]
+    for attr_name in candidate_attrs:
+        attr_value = getattr(item, attr_name, None)
+        if isinstance(attr_value, (str, int)) and str(attr_value):
+            return f"{attr_name}={attr_value}"
+
+    source_data = getattr(item, "item", None)
+    if isinstance(source_data, dict):
+        for key_name in ["line_number", "lineNumber", "index", "id", "item_id"]:
+            key_value = source_data.get(key_name)
+            if isinstance(key_value, (str, int)) and str(key_value):
+                return f"{key_name}={key_value}"
+
+    return f"item_index={item_index}"
+
+
+def _format_sample_error(error_value: object) -> str:
+    """Format evaluator sample error payloads for concise diagnostics.
+
+    Args:
+        error_value: The value at ``sample.error`` returned by Foundry.
+
+    Returns:
+        String-formatted error payload for logs.
+    """
+    if isinstance(error_value, str):
+        return error_value
+    if isinstance(error_value, dict):
+        message = error_value.get("message")
+        code = error_value.get("code")
+        if isinstance(message, str) and isinstance(code, str):
+            return f"{code}: {message}"
+        if isinstance(message, str):
+            return message
+        if isinstance(code, str):
+            return code
+    return str(error_value)
 
 
 def _build_metric_results_from_cloud_output(

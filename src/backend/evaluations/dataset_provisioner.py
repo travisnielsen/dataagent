@@ -164,6 +164,26 @@ async def _create_dataset_version(
     create_response.raise_for_status()
 
 
+async def _delete_dataset_version(
+    *,
+    client: httpx.AsyncClient,
+    project_endpoint: str,
+    token: str,
+    dataset_name: str,
+    dataset_version: str,
+) -> None:
+    """Delete a dataset version from Foundry."""
+    response = await client.delete(
+        f"{project_endpoint}/datasets/{dataset_name}/versions/{dataset_version}",
+        params={"api-version": _API_VERSION},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    # 204 is success with no content, 202 is accepted, 200 is ok
+    if response.status_code not in {200, 202, 204}:
+        response.raise_for_status()
+
+
 def cast_required_str(payload: dict[str, Any], path: list[str]) -> str:
     """Extract a required nested string value from a payload."""
     current: Any = payload
