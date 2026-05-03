@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from evaluations.harvest import (
-    build_kql_query,
     get_next_version,
+    merge_datasets,
     persist_dataset,
     sanitize_records,
     sanitize_text,
@@ -184,25 +184,50 @@ class TestVersioning:
 
 
 # ---------------------------------------------------------------------------
-# KQL templates (T021)
+# Merge datasets (T021 - Foundry trace strategy)
 # ---------------------------------------------------------------------------
 
 
-class TestKQLTemplates:
-    def test_build_error_query(self) -> None:
-        q = build_kql_query("errors", days=7, limit=50)
-        assert "ago(7d)" in q
-        assert "take 50" in q
+class TestMergeDatasets:
+    def test_merge_gold_and_traces(self) -> None:
+        gold = [
+            DatasetRecord(query="Q1", expected_behavior="E1", scenario_class="template"),
+            DatasetRecord(query="Q2", expected_behavior="E2", scenario_class="dynamic"),
+        ]
+        traces = [
+            DatasetRecord(query="Q3", expected_behavior="E3", scenario_class="conversation"),
+            DatasetRecord(query="Q4", expected_behavior="E4", scenario_class="conversation"),
+        ]
+        merged = merge_datasets(gold, traces, deduplicate=False)
+        assert len(merged) == 4
+        assert merged[0].query == "Q1"
+        assert merged[3].query == "Q4"
 
-    def test_build_latency_query(self) -> None:
-        q = build_kql_query("latency", days=14, latency_threshold_ms=3000)
-        assert "ago(14d)" in q
-        assert "3000" in q
+    def test_merge_with_deduplication(self) -> None:
+        gold = [
+            DatasetRecord(query="Q1", expected_behavior="E1", scenario_class="template"),
+            DatasetRecord(query="Q2", expected_behavior="E2", scenario_class="dynamic"),
+        ]
+        traces = [
+            DatasetRecord(query="Q2", expected_behavior="E2_trace", scenario_class="conversation"),
+            DatasetRecord(query="Q3", expected_behavior="E3", scenario_class="conversation"),
+        ]
+        merged = merge_datasets(gold, traces, deduplicate=True)
+        assert len(merged) == 3
+        assert merged[0].query == "Q1"
+        assert merged[1].query == "Q2"
+        assert merged[2].query == "Q3"
+        # Gold version should be kept
+        assert merged[1].scenario_class == "dynamic"
 
-    def test_build_low_score_query(self) -> None:
-        q = build_kql_query("low_eval_score", score_threshold=0.3)
-        assert "0.3" in q
-
-    def test_unknown_harvest_type(self) -> None:
-        with pytest.raises(ValueError, match="Unknown harvest type"):
-            build_kql_query("nonexistent")
+    def test_merge_case_insensitive_dedup(self) -> None:
+        gold = [
+            DatasetRecord(query="Show Customers", expected_behavior="E1", scenario_class="template")
+        ]
+        traces = [
+            DatasetRecord(
+                query="show customers", expected_behavior="E2", scenario_class="conversation"
+            )
+        ]
+        merged = merge_datasets(gold, traces, deduplicate=True)
+        assert len(merged) == 1

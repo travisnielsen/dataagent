@@ -2,8 +2,17 @@
 
 **Feature Branch**: `005-foundry-evaluations`
 **Created**: 2026-03-24
-**Status**: Draft
+**Status**: Implemented (updated 2026-05-02)
 **Input**: User description: "Create a new Spec Kit feature spec for incorporating Microsoft Foundry evaluations into this repository's NL2SQL multi-agent solution."
+
+## Change Log
+
+### 2026-05-02
+
+- Aligned specification language with the implemented Foundry-native cloud evaluation flow.
+- Clarified that nightly evaluations run in cloud mode and are expected to appear in Foundry Evaluations.
+- Added explicit requirement for Foundry run linkage visibility to operators (Studio URL/ID exposure).
+- Updated wording to reflect current `azure-ai-evaluation` cloud publishing path and removed stale batch API assumptions.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -29,13 +38,14 @@ As an evaluation owner, I need both curated and trace-harvested datasets so test
 
 **Why this priority**: Dataset quality and representativeness determine whether evaluator scores can drive real engineering decisions.
 
-**Independent Test**: Build one curated dataset and one trace-harvested dataset, version both, and verify they can be reused for trend and regression analysis.
+**Independent Test**: Build one curated dataset and one trace-harvested dataset (from Foundry), merge them, version both, and verify they can be reused for trend and regression analysis.
 
 **Acceptance Scenarios**:
 
 1. **Given** dataset curation for NL2SQL behavior, **When** the gold dataset is prepared, **Then** it contains 200-500 prompts spanning template queries, dynamic queries, clarifications, and what-if scenarios.
-2. **Given** Application Insights tracing is enabled, **When** trace records are harvested, **Then** prompts and responses are sanitized, labeled, and stored as a versioned trace-harvested dataset.
-3. **Given** two or more dataset versions exist, **When** an evaluation run is executed, **Then** the run records the exact dataset version to support trend and regression comparison.
+2. **Given** Foundry traces are available, **When** trace records are harvested using `AIProjectClient`, **Then** user/assistant message pairs are extracted, sanitized for sensitive data (emails, SSN, etc.), and stored as a versioned trace-harvested dataset.
+3. **Given** two or more dataset versions exist, **When** a mixed dataset is created by merging gold and trace records with deduplication, **Then** the resulting dataset contains both authoritative gold examples and real-world user interactions, versioned as `cadence-eval-mixed-v<N>.jsonl`.
+4. **Given** evaluation datasets exist, **When** an evaluation run is executed, **Then** the run records the exact dataset version and source (gold / trace_harvested / gold+trace_harvested) to support trend and regression comparison.
 
 ---
 
@@ -45,7 +55,7 @@ As a release engineer, I need standardized evaluator phases and CI gating so mer
 
 **Why this priority**: Quality gates prevent known degradations from reaching mainline and production.
 
-**Independent Test**: Execute a CI run on the P0 subset and verify that threshold regressions fail the merge gate; execute nightly full-suite run and verify summary publication.
+**Independent Test**: Execute a CI run on the P0 subset and verify that threshold regressions fail the merge gate; execute nightly full-suite run with trace harvesting, mixed dataset creation, and verify the run appears in Foundry Evaluations and emits a Foundry Studio URL.
 
 **Acceptance Scenarios**:
 
@@ -53,7 +63,8 @@ As a release engineer, I need standardized evaluator phases and CI gating so mer
 2. **Given** an agent-style response is evaluated, **When** evaluator input is prepared, **Then** message history includes tool calls and tool results, not only final assistant text.
 3. **Given** Phase 2 is enabled, **When** custom evaluators run, **Then** custom code evaluators assess SQL safety policy pass/fail and parameter extraction correctness, and custom prompt evaluators assess business answer adequacy and clarification question quality.
 4. **Given** CI executes a pull request workflow, **When** P0 thresholds regress, **Then** the merge gate fails and reports the failing metrics.
-5. **Given** nightly automation executes the full suite, **When** evaluation completes, **Then** metrics summaries are published for trend tracking.
+5. **Given** nightly automation executes with trace harvesting enabled, **When** `python -m evaluations harvest` completes, **Then** a mixed dataset is created combining gold records with recently harvested Foundry traces.
+6. **Given** nightly automation executes with cloud mode enabled, **When** the run succeeds, **Then** a Foundry-native evaluation record is created, appears in the Foundry Evaluations blade, and provides a Foundry Studio URL for operators to review results.
 
 ---
 
@@ -110,9 +121,9 @@ As an engineering lead, I need a phased rollout plan that starts with baseline m
 - **FR-009**: System MUST provide full conversation/message history including tool calls and tool results as evaluator input for agent-style evaluations.
 - **FR-010**: System MUST support Phase 2 custom code evaluators for SQL safety policy pass/fail and parameter extraction correctness against expected parameters.
 - **FR-011**: System MUST support Phase 2 custom prompt evaluators for business answer adequacy against expected-behavior rubric and clarification question quality (single-question, minimally ambiguous, actionable).
-- **FR-012**: System MUST orchestrate evaluation runs through Azure AI Projects SDK v2 / Foundry runtime workflow including dataset upload, evaluator registration/reuse, run creation, polling, and summary publication.
+- **FR-012**: System MUST orchestrate Foundry-native evaluation runs using `azure-ai-evaluation` `evaluate(..., azure_ai_project=<project-endpoint>)`, with run creation and summary publication visible in Foundry.
 - **FR-013**: System MUST fail CI on threshold regressions for the P0 subset and block merge until regression is resolved or explicitly waived by policy.
-- **FR-014**: System MUST execute the full evaluation suite on a nightly schedule and publish run outputs for trend analysis.
+- **FR-014**: System MUST execute the full evaluation suite on a nightly schedule in cloud mode and publish run outputs to Foundry plus local workflow artifacts.
 - **FR-015**: System MUST cluster evaluation failures by at least these categories: intent misroute, bad extraction, validator rejection, poor answer quality.
 - **FR-016**: System MUST support targeted remediation updates to prompts, routing behavior, and validator logic with documented rationale.
 - **FR-017**: System MUST re-run the same dataset version after remediation and report metric deltas against the prior run.
@@ -124,6 +135,7 @@ As an engineering lead, I need a phased rollout plan that starts with baseline m
   - Week 3+ production feedback loop with nightly trace refresh and weekly trend review
 - **FR-021**: System MUST preserve compatibility with existing NL2SQL runtime behavior when evaluations are disabled or unavailable.
 - **FR-022**: System MUST retain auditable records of evaluator versions, dataset versions, threshold configuration, and gate decisions per run.
+- **FR-023**: System MUST expose Foundry run linkage for operators (e.g., Studio URL) from nightly/manual cloud runs.
 
 ### Non-Functional Requirements
 
@@ -157,7 +169,7 @@ As an engineering lead, I need a phased rollout plan that starts with baseline m
 
 ### Dependencies
 
-- Foundry runtime availability for evaluator registration and run execution.
+- Foundry runtime availability for cloud run execution and result publication.
 - Application Insights tracing and retention policy sufficient for dataset harvesting and lineage.
 - CI pipeline support for threshold enforcement, artifact publication, and nightly scheduling.
 

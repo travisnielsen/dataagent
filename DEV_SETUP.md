@@ -75,6 +75,31 @@ cd src/frontend
 pnpm run dev
 ```
 
+### Evaluation Runner
+
+See [Foundry Evaluations Quickstart](specs/005-foundry-evaluations/quickstart.md) for full evaluation setup.
+
+**Quick start** (local evaluation):
+
+```bash
+# Harvest Foundry traces and merge with gold dataset
+uv run python -m evaluations harvest \
+  --output .foundry/datasets \
+  --gold src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl \
+  --days 7
+
+# Run evaluation on mixed dataset
+uv run python -m evaluations run \
+  --dataset .foundry/datasets/cadence-eval-mixed-v1.jsonl \
+  --evaluators intent_resolution,task_adherence,relevance,sql_safety \
+  --trigger manual
+```
+
+**Requirements**:
+- `.env` configured in `src/backend/` with `AZURE_AI_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME`
+- Azure AI Foundry project with deployed model (e.g., gpt-4o)
+- For SQL safety evaluation: `AZURE_SQL_*` and `AZURE_SEARCH_*` environment variables
+
 ## VS Code Setup
 
 Install the [Python extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) and open the project folder.

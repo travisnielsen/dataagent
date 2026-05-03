@@ -308,6 +308,42 @@ class TestCloudEvaluation:
         assert summary is not None
         assert summary.total_records == 3
 
+    async def test_cloud_eval_uses_foundry_result_metrics(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ) -> None:
+        """Cloud path maps Foundry metrics into RunSummary."""
+        dataset_path = _make_dataset(tmp_path)
+        config = build_default_config(
+            project_endpoint="https://example.services.ai.azure.com/api/projects/cadence",
+            judge_model_deployment="gpt-4o",
+        )
+
+        def fake_evaluate(**_: object) -> dict[str, object]:
+            return {
+                "metrics": {
+                    "sql_safety.score": 1.0,
+                    "sql_safety.pass_rate": 1.0,
+                },
+                "studio_url": "https://ai.azure.com/projects/cadence/evaluations/run123",
+            }
+
+        monkeypatch.setattr("azure.ai.evaluation.evaluate", fake_evaluate)
+
+        run, summary = await run_cloud_evaluation(
+            dataset_path=dataset_path,
+            evaluator_names=["sql_safety"],
+            config=config,
+            trigger="nightly",
+        )
+
+        assert summary is not None
+        assert run.status == "completed"
+        assert run.eval_id is not None
+        assert len(summary.metrics) == 1
+        assert summary.metrics[0].metric == "sql_safety"
+
 
 # ---------------------------------------------------------------------------
 # Result persistence (T052)

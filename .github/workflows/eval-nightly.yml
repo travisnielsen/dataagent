@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   eval-nightly:
-    runs-on: [self-hosted, linux, x64, cadence-private]
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
     timeout-minutes: 90
 
     steps:
@@ -28,17 +28,49 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run full evaluation suite
+      - name: Harvest Foundry traces and merge with gold dataset
         env:
           PYTHONPATH: src/backend
           AZURE_AI_PROJECT_ENDPOINT: ${{ secrets.AZURE_AI_PROJECT_ENDPOINT }}
           AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
+        run: |
+          uv run python -m evaluations harvest \
+            --output .foundry/datasets \
+            --gold src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl \
+            --days 7 \
+            --limit 100
+
+      - name: Determine dataset for evaluation
+        id: dataset
+        run: |
+          # Use mixed dataset if harvest succeeded, otherwise fall back to gold
+          if [ -f ".foundry/datasets/cadence-eval-mixed-v1.jsonl" ]; then
+            echo "dataset=.foundry/datasets/cadence-eval-mixed-v1.jsonl" >> $GITHUB_OUTPUT
+            echo "Using mixed gold+trace dataset for evaluation"
+          else
+            echo "dataset=src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl" >> $GITHUB_OUTPUT
+            echo "Using gold dataset for evaluation (harvest may have had issues)"
+          fi
+
+      - name: Run full evaluation suite
+        env:
+          PYTHONPATH: src/backend
+          # Evaluation runner and trace harvesting
+          AZURE_AI_PROJECT_ENDPOINT: ${{ secrets.AZURE_AI_PROJECT_ENDPOINT }}
+          AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ secrets.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
+          # For evaluating SQL safety and executing queries
+          AZURE_SEARCH_ENDPOINT: ${{ secrets.AZURE_SEARCH_ENDPOINT }}
+          AZURE_SEARCH_INDEX_TABLES: ${{ secrets.AZURE_SEARCH_INDEX_TABLES }}
+          AZURE_SQL_SERVER: ${{ secrets.AZURE_SQL_SERVER }}
+          AZURE_SQL_DATABASE: ${{ secrets.AZURE_SQL_DATABASE }}
+          # For tracing (optional)
           APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
         run: |
-          uv run python -m evaluations \
-            --dataset src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl \
+          uv run python -m evaluations run \
+            --dataset ${{ steps.dataset.outputs.dataset }} \
             --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy,indirect_attack,sql_safety,param_extraction_correctness,answer_adequacy,clarification_quality \
-            --trigger nightly
+            --trigger nightly \
+            --cloud
 
       - name: Check for regressions and open issue
         if: failure()
