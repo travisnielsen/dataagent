@@ -162,6 +162,11 @@ output "ai_foundry_account_name" {
   value       = element(reverse(split("/", module.ai_foundry.ai_foundry_id)), 0)
 }
 
+output "ai_project_endpoint" {
+  description = "Azure AI Foundry project endpoint"
+  value       = local.ai_project_endpoint
+}
+
 output "sql_database_name" {
   description = "Azure SQL database name"
   value       = var.sql_database_name
