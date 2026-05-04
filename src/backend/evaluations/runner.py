@@ -820,6 +820,14 @@ def _check_stall_timeout(
     stall_timeout_seconds: int,
 ) -> None:
     """Raise RuntimeError if a run has been in_progress with zero results past the stall deadline."""
+    # Operational note: if this triggers for GitHub workflow runs, verify Foundry/OpenAI
+    # RBAC in infra/terraform/security.tf for:
+    # - azurerm_role_assignment.github_federated_ai_foundry_user
+    # - azurerm_role_assignment.github_federated_openai_user
+    # - azurerm_role_assignment.github_runner_ai_foundry_user
+    # - azurerm_role_assignment.github_runner_openai_user
+    # Missing account-scoped assignment(s) can allow run submission but prevent judge
+    # model execution, which presents as status=in_progress with total=0 and no output.
     if (
         not seen_any_results
         and status == "in_progress"
