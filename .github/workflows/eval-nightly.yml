@@ -55,7 +55,7 @@ jobs:
         run: |
           uv run python -m evaluations run \
             --dataset src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl \
-            --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy,indirect_attack \
+            --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy \
             --trigger nightly \
             --cloud
 

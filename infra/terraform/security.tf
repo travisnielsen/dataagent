@@ -69,10 +69,29 @@ resource "azurerm_role_assignment" "github_federated_rg_user_access_admin" {
 resource "azurerm_role_assignment" "github_federated_ai_foundry_user" {
   count = local.github_federated_rbac_principal_object_id != "" ? 1 : 0
 
-  # Account scope (not project) is required so Foundry's eval execution engine
-  # can call the judge model deployment on behalf of the submitting principal.
+  # IMPORTANT: Use Foundry account scope (not project scope).
+  #
+  # Symptom when mis-scoped: eval run is accepted and remains in_progress, but
+  # result_counts.total stays 0 and output_items stays 0 indefinitely.
+  #
+  # Reason: the async evaluator executes under the submitting principal and needs
+  # access to account-level model deployments (judge model). Project-only scope
+  # can allow submission while still blocking actual evaluation execution.
   scope                = module.ai_foundry.ai_foundry_id
   role_definition_name = "Azure AI User"
+  principal_id         = local.github_federated_rbac_principal_object_id
+}
+
+resource "azurerm_role_assignment" "github_federated_openai_user" {
+  count = local.github_federated_rbac_principal_object_id != "" ? 1 : 0
+
+  # Required data-plane permission for inference with Entra ID.
+  #
+  # Azure AI User alone is not sufficient for OpenAI inference calls made during
+  # eval judging. This role provides least-privilege access needed for model
+  # invocation without granting deployment management permissions.
+  scope                = module.ai_foundry.ai_foundry_id
+  role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = local.github_federated_rbac_principal_object_id
 }
 
@@ -90,9 +109,20 @@ resource "azurerm_role_assignment" "github_runner_acr_pull" {
 }
 
 resource "azurerm_role_assignment" "github_runner_ai_foundry_user" {
-  # Account scope so the runner identity can invoke model deployments during eval execution.
+  # Keep runner identity aligned with federated identity behavior.
+  # Account scope prevents submission-only access patterns for eval jobs.
   scope                = module.ai_foundry.ai_foundry_id
   role_definition_name = "Azure AI User"
+  principal_id         = azurerm_user_assigned_identity.github_runner.principal_id
+
+  depends_on = [time_sleep.github_runner_identity_propagation]
+}
+
+resource "azurerm_role_assignment" "github_runner_openai_user" {
+  # Same least-privilege OpenAI inference access as federated principal.
+  # Ensures both identities can invoke judge deployments during evaluation.
+  scope                = module.ai_foundry.ai_foundry_id
+  role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = azurerm_user_assigned_identity.github_runner.principal_id
 
   depends_on = [time_sleep.github_runner_identity_propagation]
