@@ -17,7 +17,7 @@ jobs:
     # rejects federated SP tokens at the data-plane updateUpload endpoint
     # (PermissionDenied even with Owner everywhere); UAMI tokens carry the
     # claims MISE expects.
-    runs-on: [self-hosted, linux, x64, cadence-private]
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
     timeout-minutes: 90
 
     steps:
