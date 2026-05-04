@@ -127,3 +127,34 @@ resource "azurerm_role_assignment" "github_runner_openai_user" {
 
   depends_on = [time_sleep.github_runner_identity_propagation]
 }
+
+resource "azurerm_role_assignment" "github_runner_ai_developer_rg" {
+  # REQUIRED for the runner UAMI to submit Foundry cloud evaluation runs and
+  # have them complete. The Foundry evaluation engine uploads results via the
+  # AzureML data-plane endpoint `evaluations/runs:updateUpload`, which is gated
+  # by `Microsoft.MachineLearningServices/workspaces/evaluations/*` actions.
+  # Those actions are part of the "Azure AI Developer" role; "Azure AI User"
+  # alone is NOT sufficient and runs fail with PermissionDenied.
+  #
+  # Scope is the resource group so the grant covers the Foundry account, its
+  # projects, and any associated AzureML/storage data-plane resources used by
+  # the eval engine.
+  scope                = azurerm_resource_group.private_rg.id
+  role_definition_name = "Azure AI Developer"
+  principal_id         = azurerm_user_assigned_identity.github_runner.principal_id
+
+  depends_on = [time_sleep.github_runner_identity_propagation]
+}
+
+resource "azurerm_role_assignment" "github_runner_ai_foundry_user_project" {
+  # Project-scope Azure AI User mirrors the typical Foundry RBAC pattern for
+  # principals that interact with a specific project (datasets, evals,
+  # threads). Account-scope grant above provides cross-project capability;
+  # this project-scope grant ensures the SDK's project-scoped resolver finds
+  # the principal when project-only checks are performed.
+  scope                = module.ai_foundry.ai_foundry_project_id["cadence"]
+  role_definition_name = "Azure AI User"
+  principal_id         = azurerm_user_assigned_identity.github_runner.principal_id
+
+  depends_on = [time_sleep.github_runner_identity_propagation]
+}

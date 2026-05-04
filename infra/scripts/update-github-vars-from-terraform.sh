@@ -227,6 +227,7 @@ fi
 set_repo_var "AZURE_FOUNDRY_DATASET_VERSION" "$foundry_dataset_version"
 map_and_set "AZURE_AI_PROJECT_ENDPOINT" "ai_project_endpoint"
 map_and_set "AZURE_GH_RUNNER_IDENTITY_NAME" "github_runner_identity_name"
+map_and_set "EVALUATIONS_RUNNER_CLIENT_ID" "github_runner_identity_client_id"
 map_and_set "AZURE_SUBSCRIPTION_ID" "azure_subscription_id"
 map_and_set "AZURE_TENANT_ID" "azure_tenant_id"
 

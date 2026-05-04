@@ -112,6 +112,11 @@ output "github_runner_identity_principal_id" {
   value       = azurerm_user_assigned_identity.github_runner.principal_id
 }
 
+output "github_runner_identity_client_id" {
+  description = "Private GitHub runner managed identity client ID (used by azure/login auth-type=IDENTITY)"
+  value       = azurerm_user_assigned_identity.github_runner.client_id
+}
+
 output "container_registry_login_server" {
   description = "Container Registry login server"
   value       = module.container_registry.resource.login_server
