@@ -12,7 +12,11 @@ permissions:
 
 jobs:
   eval-nightly:
-    runs-on: [ self-hosted, linux, x64, cadence-private ]
+    # Temporarily on a public runner to rule out private runner egress as the
+    # cause of stalled Foundry evaluation runs (Foundry account is currently
+    # configured for public network access). Revert to the self-hosted private
+    # runner once the eval engine consistently completes.
+    runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
