@@ -810,6 +810,31 @@ async def _find_existing_eval_id_by_name(*, openai_client: object, eval_name: st
     return None
 
 
+def _check_stall_timeout(
+    *,
+    eval_id: str,
+    run_id: str,
+    status: str | None,
+    seen_any_results: bool,
+    stall_deadline: float,
+    stall_timeout_seconds: int,
+) -> None:
+    """Raise RuntimeError if a run has been in_progress with zero results past the stall deadline."""
+    if (
+        not seen_any_results
+        and status == "in_progress"
+        and asyncio.get_running_loop().time() > stall_deadline
+    ):
+        msg = (
+            f"Foundry run stalled: eval_id={eval_id} run_id={run_id} "
+            f"status={status} result_counts.total=0 after {stall_timeout_seconds}s. "
+            "Likely cause: the submitting identity lacks 'Azure AI User' at the "
+            "AI Foundry account scope (not just project scope), preventing the "
+            "evaluation execution engine from calling the judge model deployment."
+        )
+        raise RuntimeError(msg)
+
+
 async def _poll_cloud_evaluation_result(
     *,
     config: EvaluationConfig,
@@ -817,6 +842,7 @@ async def _poll_cloud_evaluation_result(
     run_id: str,
     timeout_seconds: int = 3600,
     poll_interval_seconds: int = 30,
+    stall_timeout_seconds: int = 600,
 ) -> dict[str, object]:
     """Poll a Foundry evaluation run until terminal status and collect output items.
 
@@ -826,12 +852,15 @@ async def _poll_cloud_evaluation_result(
         run_id: Foundry evaluation run id.
         timeout_seconds: Max seconds to wait for terminal status (default: 3600 = 60 min).
         poll_interval_seconds: Poll interval in seconds.
+        stall_timeout_seconds: Max seconds to wait before any result_counts.total > 0.
+            Catches runs accepted by Foundry that never start executing (e.g. due to
+            missing identity permissions on the judge model deployment).
 
     Returns:
         Dictionary with run status, output items, and per-record pass/fail counts.
 
     Raises:
-        RuntimeError: If polling times out or run ends in a non-completed status.
+        RuntimeError: If polling times out, stall is detected, or run ends in a non-completed status.
     """
     try:
         from azure.ai.projects import AIProjectClient  # noqa: PLC0415
@@ -848,7 +877,9 @@ async def _poll_cloud_evaluation_result(
     try:
         openai_client = client.get_openai_client()
         deadline = asyncio.get_running_loop().time() + timeout_seconds
+        stall_deadline = asyncio.get_running_loop().time() + stall_timeout_seconds
         status: str | None = None
+        seen_any_results = False
 
         while asyncio.get_running_loop().time() < deadline:
             run_obj = await asyncio.to_thread(
@@ -860,8 +891,34 @@ async def _poll_cloud_evaluation_result(
             if isinstance(status_candidate, str):
                 status = status_candidate
 
+            result_counts = getattr(run_obj, "result_counts", None)
+            total = getattr(result_counts, "total", 0)
+            logger.info(
+                "Polling Foundry run: eval_id=%s run_id=%s status=%s result_counts.total=%s",
+                eval_id,
+                run_id,
+                status,
+                total,
+            )
+
+            if not seen_any_results and total > 0:
+                seen_any_results = True
+
             if status in {"completed", "failed", "cancelled"}:
                 break
+
+            # Fail fast if the run has been in_progress for stall_timeout_seconds
+            # without producing any result items. This catches permission errors where
+            # Foundry accepts the run submission but the execution engine cannot call
+            # the judge model (e.g. Azure AI User role scoped to project, not account).
+            _check_stall_timeout(
+                eval_id=eval_id,
+                run_id=run_id,
+                status=status,
+                seen_any_results=seen_any_results,
+                stall_deadline=stall_deadline,
+                stall_timeout_seconds=stall_timeout_seconds,
+            )
 
             # Use a longer poll interval for long-running evals (10-20 min).
             await asyncio.sleep(poll_interval_seconds)
@@ -881,32 +938,7 @@ async def _poll_cloud_evaluation_result(
 
         _log_cloud_evaluation_diagnostics(output_items=output_items)
 
-        total_passed = 0
-        total_failed = 0
-        for item in output_items:
-            item_results = getattr(item, "results", None)
-            if not isinstance(item_results, list) or not item_results:
-                continue
-
-            saw_explicit_failure = False
-            saw_explicit_pass = False
-            for result in item_results:
-                passed = getattr(result, "passed", None)
-                if isinstance(passed, bool):
-                    if passed:
-                        saw_explicit_pass = True
-                    else:
-                        saw_explicit_failure = True
-                    continue
-
-                sample_payload = getattr(result, "sample", None)
-                if isinstance(sample_payload, dict) and sample_payload.get("error"):
-                    saw_explicit_failure = True
-
-            if saw_explicit_failure:
-                total_failed += 1
-            elif saw_explicit_pass:
-                total_passed += 1
+        total_passed, total_failed = _count_output_item_results(output_items)
 
         return {
             "status": status,
@@ -916,6 +948,42 @@ async def _poll_cloud_evaluation_result(
         }
     finally:
         await asyncio.to_thread(client.close)
+
+
+def _count_output_item_results(output_items: Sequence[object]) -> tuple[int, int]:
+    """Count passing and failing output items from a completed Foundry eval run.
+
+    Returns:
+        (total_passed, total_failed) tuple.
+    """
+    total_passed = 0
+    total_failed = 0
+    for item in output_items:
+        item_results = getattr(item, "results", None)
+        if not isinstance(item_results, list) or not item_results:
+            continue
+
+        saw_explicit_failure = False
+        saw_explicit_pass = False
+        for result in item_results:
+            passed = getattr(result, "passed", None)
+            if isinstance(passed, bool):
+                if passed:
+                    saw_explicit_pass = True
+                else:
+                    saw_explicit_failure = True
+                continue
+
+            sample_payload = getattr(result, "sample", None)
+            if isinstance(sample_payload, dict) and sample_payload.get("error"):
+                saw_explicit_failure = True
+
+        if saw_explicit_failure:
+            total_failed += 1
+        elif saw_explicit_pass:
+            total_passed += 1
+
+    return total_passed, total_failed
 
 
 def _log_cloud_evaluation_diagnostics(  # noqa: C901, PLR0912
