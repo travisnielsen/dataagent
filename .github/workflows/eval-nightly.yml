@@ -12,20 +12,23 @@ permissions:
 
 jobs:
   eval-nightly:
-    # Temporarily on a public runner to rule out private runner egress as the
-    # cause of stalled Foundry evaluation runs (Foundry account is currently
-    # configured for public network access). Revert to the self-hosted private
-    # runner once the eval engine consistently completes.
-    runs-on: ubuntu-latest
+    # Run on the self-hosted private runner so we can authenticate with the
+    # attached user-assigned managed identity. The Foundry evaluation engine
+    # rejects federated SP tokens at the data-plane updateUpload endpoint
+    # (PermissionDenied even with Owner everywhere); UAMI tokens carry the
+    # claims MISE expects.
+    runs-on: [ self-hosted, linux, x64, cadence-private ]
     timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to Azure
+      - name: Login to Azure (UAMI)
         uses: azure/login@v2.3.0
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          auth-type: IDENTITY
+          # cadence-gh-runner-id user-assigned managed identity
+          client-id: 3dba5eb2-7685-4a8f-b3ee-1a89305f36f6
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
