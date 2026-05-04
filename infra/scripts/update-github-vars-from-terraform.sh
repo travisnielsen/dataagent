@@ -63,6 +63,16 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
+PYTHON_BIN=""
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  echo "python3 or python is required but was not found in PATH"
+  exit 1
+fi
+
 if [[ ! -d "$TERRAFORM_DIR/.terraform" ]]; then
   echo "Terraform is not initialized in $TERRAFORM_DIR"
   echo "Run: cd infra/terraform && terraform init"
@@ -90,7 +100,7 @@ export OUTPUTS_JSON
 
 read_output() {
   local output_name="$1"
-  python - "$output_name" <<'PY'
+  "$PYTHON_BIN" - "$output_name" <<'PY'
 import json
 import os
 import sys
@@ -203,6 +213,18 @@ if [[ -z "$foundry_eval_name" ]]; then
   echo "INFO AZURE_FOUNDRY_EVAL_NAME using default (missing terraform output: foundry_eval_name)"
 fi
 set_repo_var "AZURE_FOUNDRY_EVAL_NAME" "$foundry_eval_name"
+foundry_dataset_name="$(read_output "foundry_dataset_name")"
+if [[ -z "$foundry_dataset_name" ]]; then
+  foundry_dataset_name="cadence-eval-gold"
+  echo "INFO AZURE_FOUNDRY_DATASET_NAME using default (missing terraform output: foundry_dataset_name)"
+fi
+set_repo_var "AZURE_FOUNDRY_DATASET_NAME" "$foundry_dataset_name"
+foundry_dataset_version="$(read_output "foundry_dataset_version")"
+if [[ -z "$foundry_dataset_version" ]]; then
+  foundry_dataset_version="v1"
+  echo "INFO AZURE_FOUNDRY_DATASET_VERSION using default (missing terraform output: foundry_dataset_version)"
+fi
+set_repo_var "AZURE_FOUNDRY_DATASET_VERSION" "$foundry_dataset_version"
 map_and_set "AZURE_AI_PROJECT_ENDPOINT" "ai_project_endpoint"
 map_and_set "AZURE_GH_RUNNER_IDENTITY_NAME" "github_runner_identity_name"
 map_and_set "AZURE_SUBSCRIPTION_ID" "azure_subscription_id"

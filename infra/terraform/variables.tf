@@ -200,3 +200,15 @@ variable "foundry_eval_name" {
   default     = "cadence-eval-v1"
   description = "Stable Foundry evaluation definition name reused across scheduled runs."
 }
+
+variable "foundry_dataset_name" {
+  type        = string
+  default     = "cadence-eval-gold"
+  description = "Foundry dataset asset name used by evaluation runs."
+}
+
+variable "foundry_dataset_version" {
+  type        = string
+  default     = "v1"
+  description = "Foundry dataset asset version used by evaluation runs."
+}

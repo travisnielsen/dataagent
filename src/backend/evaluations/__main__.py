@@ -122,6 +122,8 @@ async def _run_main(args: argparse.Namespace) -> int:
     config = build_default_config(
         project_endpoint=os.getenv("AZURE_AI_PROJECT_ENDPOINT", ""),
         judge_model_deployment=os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "gpt-4o"),
+        dataset_name=os.getenv("AZURE_FOUNDRY_DATASET_NAME", "cadence-eval-gold"),
+        dataset_version=os.getenv("AZURE_FOUNDRY_DATASET_VERSION", "v1"),
     )
     evaluator_names = [e.strip() for e in args.evaluators.split(",") if e.strip()]
 
