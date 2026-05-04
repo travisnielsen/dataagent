@@ -27,8 +27,8 @@ jobs:
         uses: azure/login@v2.3.0
         with:
           auth-type: IDENTITY
-          # cadence-gh-runner-id user-assigned managed identity
-          client-id: 3dba5eb2-7685-4a8f-b3ee-1a89305f36f6
+          # cadence-gh-runner-id user-assigned managed identity (client ID synced from Terraform output)
+          client-id: ${{ vars.EVALUATIONS_RUNNER_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
