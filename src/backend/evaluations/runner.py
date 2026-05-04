@@ -629,6 +629,11 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
         )
 
         # Resolve existing Foundry dataset asset.
+        logger.info(
+            "Resolving Foundry dataset asset: name=%s version=%s",
+            config.dataset_name,
+            config.dataset_version,
+        )
         dataset_version_obj = await asyncio.to_thread(
             client.datasets.get,
             name=config.dataset_name,
@@ -641,6 +646,7 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
                 f"{config.dataset_name}/{config.dataset_version}"
             )
             raise RuntimeError(msg)
+        logger.info("Resolved Foundry dataset id: %s", dataset_id)
 
         openai_client = client.get_openai_client()
 
@@ -809,8 +815,8 @@ async def _poll_cloud_evaluation_result(
     config: EvaluationConfig,
     eval_id: str,
     run_id: str,
-    timeout_seconds: int = 600,
-    poll_interval_seconds: int = 5,
+    timeout_seconds: int = 3600,
+    poll_interval_seconds: int = 30,
 ) -> dict[str, object]:
     """Poll a Foundry evaluation run until terminal status and collect output items.
 
@@ -818,7 +824,7 @@ async def _poll_cloud_evaluation_result(
         config: Evaluation configuration.
         eval_id: Foundry evaluation definition id.
         run_id: Foundry evaluation run id.
-        timeout_seconds: Max seconds to wait for terminal status.
+        timeout_seconds: Max seconds to wait for terminal status (default: 3600 = 60 min).
         poll_interval_seconds: Poll interval in seconds.
 
     Returns:
@@ -857,6 +863,7 @@ async def _poll_cloud_evaluation_result(
             if status in {"completed", "failed", "cancelled"}:
                 break
 
+            # Use a longer poll interval for long-running evals (10-20 min).
             await asyncio.sleep(poll_interval_seconds)
 
         if status not in {"completed", "failed", "cancelled"}:

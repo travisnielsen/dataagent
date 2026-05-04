@@ -177,6 +177,16 @@ output "foundry_eval_name" {
   value       = var.foundry_eval_name
 }
 
+output "foundry_dataset_name" {
+  description = "Foundry dataset asset name for recurring evaluation runs"
+  value       = var.foundry_dataset_name
+}
+
+output "foundry_dataset_version" {
+  description = "Foundry dataset asset version for recurring evaluation runs"
+  value       = var.foundry_dataset_version
+}
+
 output "sql_database_name" {
   description = "Azure SQL database name"
   value       = var.sql_database_name
