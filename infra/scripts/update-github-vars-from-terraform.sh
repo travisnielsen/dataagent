@@ -225,6 +225,13 @@ if [[ -z "$foundry_dataset_version" ]]; then
   echo "INFO AZURE_FOUNDRY_DATASET_VERSION using default (missing terraform output: foundry_dataset_version)"
 fi
 set_repo_var "AZURE_FOUNDRY_DATASET_VERSION" "$foundry_dataset_version"
+foundry_agent_id="$(read_output "foundry_agent_id")"
+if [[ -z "$foundry_agent_id" ]]; then
+  foundry_agent_id="DataAssistant:1"
+  echo "INFO AZURE_AI_AGENT_ID using default (missing terraform output: foundry_agent_id)"
+fi
+set_repo_var "AZURE_AI_AGENT_ID" "$foundry_agent_id"
+map_and_set "AZURE_AD_CLIENT_ID" "azure_ad_client_id"
 map_and_set "AZURE_AI_PROJECT_ENDPOINT" "ai_project_endpoint"
 map_and_set "AZURE_GH_RUNNER_IDENTITY_NAME" "github_runner_identity_name"
 map_and_set "EVALUATIONS_RUNNER_CLIENT_ID" "github_runner_identity_client_id"

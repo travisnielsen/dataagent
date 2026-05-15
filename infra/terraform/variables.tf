@@ -201,6 +201,12 @@ variable "foundry_eval_name" {
   description = "Stable Foundry evaluation definition name reused across scheduled runs."
 }
 
+variable "foundry_agent_id" {
+  type        = string
+  default     = "DataAssistant:1"
+  description = "Foundry agent identifier (name:version) that trace-based evaluations filter App Insights spans by."
+}
+
 variable "foundry_dataset_name" {
   type        = string
   default     = "cadence-eval-gold"

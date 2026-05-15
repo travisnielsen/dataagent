@@ -6,8 +6,10 @@ from typing import Any
 
 import pytest
 
-# Ensure src/backend/ is on the path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "backend"))
+# Ensure src/backend/ and src/evaluations/ are on the path for imports
+_SRC = Path(__file__).parent.parent / "src"
+sys.path.insert(0, str(_SRC / "backend"))
+sys.path.insert(0, str(_SRC))
 
 from config.settings import Settings
 from shared.protocols import NoOpReporter

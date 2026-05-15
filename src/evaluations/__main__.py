@@ -18,6 +18,7 @@ from pathlib import Path
 
 from evaluations.config import build_default_config
 from evaluations.harvest import harvest_foundry_traces, merge_datasets, persist_dataset
+from evaluations.replay import replay_dataset
 from evaluations.runner import (
     compute_quality_gate,
     load_dataset,
@@ -106,6 +107,36 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip deduplication of queries",
     )
 
+    # Replay dataset against deployed Cadence API command
+    replay_parser = subparsers.add_parser(
+        "replay",
+        help="Replay dataset against deployed Cadence API to emit OTel spans",
+    )
+    replay_parser.add_argument(
+        "--dataset",
+        type=Path,
+        required=True,
+        help="Path to JSONL evaluation dataset",
+    )
+    replay_parser.add_argument(
+        "--base-url",
+        type=str,
+        default=os.getenv("CADENCE_API_BASE_URL", ""),
+        help="Cadence API base URL (env: CADENCE_API_BASE_URL)",
+    )
+    replay_parser.add_argument(
+        "--audience-client-id",
+        type=str,
+        default=os.getenv("AZURE_AD_CLIENT_ID", ""),
+        help="AAD client id used as token audience (env: AZURE_AD_CLIENT_ID)",
+    )
+    replay_parser.add_argument(
+        "--inter-request-delay",
+        type=float,
+        default=1.0,
+        help="Politeness delay between requests in seconds (default: 1.0)",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -114,8 +145,40 @@ async def _main(args: argparse.Namespace) -> int:
         return await _harvest_main(args)
     if args.command == "run":
         return await _run_main(args)
+    if args.command == "replay":
+        return await _replay_main(args)
     logger.error("Unknown command: %s", args.command)
     return 2
+
+
+async def _replay_main(args: argparse.Namespace) -> int:
+    if not args.base_url:
+        logger.error("--base-url or CADENCE_API_BASE_URL is required for replay")
+        return 2
+    if not args.audience_client_id:
+        logger.error("--audience-client-id or AZURE_AD_CLIENT_ID is required for replay")
+        return 2
+    if not args.dataset.exists():
+        logger.error("Dataset not found: %s", args.dataset)
+        return 2
+
+    try:
+        result = await replay_dataset(
+            dataset_path=args.dataset,
+            base_url=args.base_url,
+            audience_client_id=args.audience_client_id,
+            inter_request_delay_seconds=args.inter_request_delay,
+        )
+    except Exception:
+        logger.exception("Replay failed")
+        return 2
+
+    print(  # noqa: T201
+        f"Replay complete: total={result.total} succeeded={result.succeeded} "
+        f"failed={result.failed} window={result.started_at.isoformat()}.."
+        f"{result.completed_at.isoformat()}"
+    )
+    return 0 if result.failed == 0 else 1
 
 
 async def _run_main(args: argparse.Namespace) -> int:

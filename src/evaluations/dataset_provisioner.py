@@ -285,7 +285,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--datasets-dir",
         type=Path,
-        default=Path("src/backend/evaluations/datasets"),
+        default=Path("src/evaluations/datasets"),
         help="Path to dataset JSONL files",
     )
     parser.add_argument(

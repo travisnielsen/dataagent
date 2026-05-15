@@ -530,7 +530,7 @@ async def run_cloud_evaluation(
 # ---------------------------------------------------------------------------
 
 
-async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
+async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0914, PLR0915
     *,
     evaluator_names: list[str],
     config: EvaluationConfig,
@@ -568,6 +568,24 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
     eval_name = configured_eval_name or f"cadence-{trigger}-{run_id}"
     run_display_name = f"cadence-eval-{trigger}-{run_id}"
 
+    # Trace evaluation configuration. Foundry filters Application Insights
+    # `invoke_agent` spans by `gen_ai.agent.id == AZURE_AI_AGENT_ID`, samples up
+    # to `max_traces` unique trace IDs, and runs evaluators over the extracted
+    # query / response / tool fields. This produces varied real outputs per row
+    # which is what cluster analysis needs.
+    agent_id = os.getenv("AZURE_AI_AGENT_ID", "").strip()
+    if not agent_id:
+        msg = (
+            "AZURE_AI_AGENT_ID must be set for cloud evaluation (format: "
+            "'<agent-name>:<version>', e.g. 'DataAssistant:1'). This is the "
+            "gen_ai.agent.id emitted by the running Cadence backend; Foundry "
+            "trace evaluation filters App Insights spans by this value."
+        )
+        raise RuntimeError(msg)
+
+    trace_lookback_hours = int(os.getenv("AZURE_AI_TRACE_LOOKBACK_HOURS", "1"))
+    trace_max_traces = int(os.getenv("AZURE_AI_TRACE_MAX_TRACES", "200"))
+
     # Foundry currently supports a subset of built-in evaluators for native async runs.
     supported_built_in_evaluators = {
         "intent_resolution",
@@ -577,6 +595,9 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
         "indirect_attack",
     }
 
+    # Trace-mode placeholders. Per Foundry docs, when evaluating traces the
+    # service extracts conversation data from OTel span attributes and exposes
+    # them as item.query / item.response / item.tool_definitions / item.tool_calls.
     testing_criteria_payload: list[dict[str, object]] = []
     unsupported_evaluators: list[str] = []
     for evaluator_name in evaluator_names:
@@ -586,9 +607,10 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
 
         data_mapping: dict[str, str] = {
             "query": "{{item.query}}",
-            "response": "{{item.expected_behavior}}",
+            "response": "{{item.response}}",
         }
         if evaluator_name == "tool_call_accuracy":
+            data_mapping["tool_calls"] = "{{item.tool_calls}}"
             data_mapping["tool_definitions"] = "{{item.tool_definitions}}"
 
         testing_criteria_payload.append({
@@ -622,31 +644,17 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
 
     try:
         logger.info(
-            "Submitting Foundry REST evaluation: dataset=%s/%s evaluators=%d",
-            config.dataset_name,
-            config.dataset_version,
+            "Submitting Foundry trace evaluation: agent_id=%s evaluators=%d "
+            "lookback_hours=%d max_traces=%d",
+            agent_id,
             len(evaluator_names),
+            trace_lookback_hours,
+            trace_max_traces,
         )
 
-        # Resolve existing Foundry dataset asset.
-        logger.info(
-            "Resolving Foundry dataset asset: name=%s version=%s",
-            config.dataset_name,
-            config.dataset_version,
-        )
-        dataset_version_obj = await asyncio.to_thread(
-            client.datasets.get,
-            name=config.dataset_name,
-            version=config.dataset_version,
-        )
-        dataset_id = getattr(dataset_version_obj, "id", None)
-        if not isinstance(dataset_id, str) or not dataset_id:
-            msg = (
-                "Foundry dataset lookup did not return a valid dataset id for "
-                f"{config.dataset_name}/{config.dataset_version}"
-            )
-            raise RuntimeError(msg)
-        logger.info("Resolved Foundry dataset id: %s", dataset_id)
+        # Trace eval reads spans directly from App Insights; no dataset asset
+        # is required. The dataset lives only as the replay-input contract.
+        dataset_id = ""
 
         openai_client = client.get_openai_client()
 
@@ -664,41 +672,20 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
                 )
 
         if not eval_id:
+            data_source_config_payload: dict[str, object] = {
+                "type": "azure_ai_source",
+                "scenario": "traces",
+            }
+
             eval_object = await asyncio.to_thread(
                 openai_client.evals.create,
                 name=eval_name,
-                data_source_config={
-                    "type": "custom",
-                    "item_schema": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string"},
-                            "expected_behavior": {"type": "string"},
-                            "context": {"type": ["string", "null"]},
-                            "ground_truth_sql": {"type": ["string", "null"]},
-                            "ground_truth_params": {
-                                "anyOf": [
-                                    {"type": "object", "additionalProperties": True},
-                                    {"type": "null"},
-                                ]
-                            },
-                            "conversation": {
-                                "anyOf": [
-                                    {"type": "array", "items": {"type": "object"}},
-                                    {"type": "null"},
-                                ]
-                            },
-                        },
-                        "required": ["query", "expected_behavior"],
-                        "additionalProperties": True,
-                    },
-                },
+                data_source_config=cast(Any, data_source_config_payload),
                 testing_criteria=cast(Any, testing_criteria_payload),
                 metadata={
                     "trigger": trigger,
                     "run_id": run_id,
-                    "dataset_name": config.dataset_name,
-                    "dataset_version": config.dataset_version,
+                    "agent_id": agent_id,
                 },
             )
 
@@ -713,22 +700,24 @@ async def _submit_cloud_evaluation(  # noqa: C901, PLR0912, PLR0915
                     eval_id,
                 )
 
+        run_data_source: dict[str, object] = {
+            "type": "azure_ai_traces",
+            "agent_id": agent_id,
+            "max_traces": trace_max_traces,
+            "lookback_hours": trace_lookback_hours,
+        }
+
         eval_run = await asyncio.to_thread(
             openai_client.evals.runs.create,
             eval_id=eval_id,
             name=run_display_name,
-            data_source={
-                "type": "jsonl",
-                "source": {
-                    "type": "file_id",
-                    "id": dataset_id,
-                },
-            },
+            data_source=cast(Any, run_data_source),
             metadata={
                 "trigger": trigger,
                 "run_id": run_id,
                 "is_foundry_eval": "true",
                 "evaluator_names": ",".join(evaluator_names),
+                "agent_id": agent_id,
             },
         )
 
