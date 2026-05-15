@@ -51,6 +51,7 @@ jobs:
           PYTHONPATH: src
           CADENCE_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           AZURE_AD_CLIENT_ID: ${{ vars.AZURE_AD_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.EVALUATIONS_RUNNER_CLIENT_ID }}
         run: |
           uv run python -m evaluations replay \
             --dataset src/evaluations/datasets/cadence-eval-gold-v1.jsonl
@@ -69,6 +70,7 @@ jobs:
           AZURE_FOUNDRY_EVAL_NAME: ${{ vars.AZURE_FOUNDRY_EVAL_NAME }}
           AZURE_FOUNDRY_DATASET_NAME: ${{ vars.AZURE_FOUNDRY_DATASET_NAME }}
           AZURE_FOUNDRY_DATASET_VERSION: ${{ vars.AZURE_FOUNDRY_DATASET_VERSION }}
+          AZURE_CLIENT_ID: ${{ vars.EVALUATIONS_RUNNER_CLIENT_ID }}
           # Trace evaluation target — required for cluster analysis. Foundry
           # filters App Insights `invoke_agent` spans by this exact value
           # (format: `<agent-name>:<version>`, e.g. `DataAssistant:1`).

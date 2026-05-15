@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -34,6 +36,33 @@ logger = logging.getLogger(__name__)
 DEFAULT_CHAT_PATH = "/api/chat/stream"
 DEFAULT_PER_REQUEST_TIMEOUT_SECONDS = 180.0
 DEFAULT_INTER_REQUEST_DELAY_SECONDS = 1.0
+
+if TYPE_CHECKING:
+    from azure.identity.aio import DefaultAzureCredential
+
+
+def _build_default_credential(
+    managed_identity_client_id: str | None = None,
+) -> DefaultAzureCredential:
+    """Create the default credential for replay authentication.
+
+    Args:
+        managed_identity_client_id: Optional user-assigned managed identity
+            client id. When omitted, falls back to ``AZURE_CLIENT_ID``.
+
+    Returns:
+        An async ``DefaultAzureCredential`` instance.
+    """
+    try:
+        from azure.identity.aio import DefaultAzureCredential  # noqa: PLC0415
+    except ImportError as e:
+        msg = f"azure-identity is required for replay auth: {e}"
+        raise ImportError(msg) from e
+
+    client_id = managed_identity_client_id or os.getenv("AZURE_CLIENT_ID")
+    if client_id:
+        return DefaultAzureCredential(managed_identity_client_id=client_id)
+    return DefaultAzureCredential()
 
 
 class ReplayResult:
@@ -61,7 +90,9 @@ class ReplayResult:
         return max(1, int(elapsed_seconds // 3600) + 1)
 
 
-async def _acquire_bearer_token(audience_client_id: str) -> str:
+async def _acquire_bearer_token(
+    audience_client_id: str, managed_identity_client_id: str | None = None
+) -> str:
     """Acquire an Entra ID access token for the Cadence API audience.
 
     Args:
@@ -69,18 +100,14 @@ async def _acquire_bearer_token(audience_client_id: str) -> str:
             registration. The token is requested for ``api://<id>/.default``
             which matches the audiences accepted by
             ``AzureADAuthMiddleware``.
+        managed_identity_client_id: Optional user-assigned managed identity
+            client id for environments with multiple attached identities.
 
     Returns:
         Bearer token string.
     """
-    try:
-        from azure.identity.aio import DefaultAzureCredential  # noqa: PLC0415
-    except ImportError as e:
-        msg = f"azure-identity is required for replay auth: {e}"
-        raise ImportError(msg) from e
-
     scope = f"api://{audience_client_id}/.default"
-    async with DefaultAzureCredential() as credential:
+    async with _build_default_credential(managed_identity_client_id) as credential:
         token = await credential.get_token(scope)
         return token.token
 
