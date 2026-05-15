@@ -36,7 +36,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-evaluation = ["azure-ai-evaluation>=1.0.0", "azure-ai-projects>=1.0.0"]
+# `azure-ai-projects` is used by the evaluations harness for dataset asset
+# management and trace queries. The `azure-ai-evaluation` SDK is intentionally
+# not pinned: we submit Foundry trace evaluations directly via the OpenAI-
+# compatible REST API in `src/evaluations/runner.py`.
+evaluation = ["azure-ai-projects>=1.0.0"]
 observability = ["azure-monitor-opentelemetry>=1.0.0"]
 dev = [
     "pytest>=8.3.0",
@@ -58,7 +62,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/backend"]
+packages = ["src/backend", "src/evaluations"]
 
 [tool.uv]
 prerelease = "allow"
@@ -75,35 +79,35 @@ install = "uv sync --all-extras --dev"
 
 # Formatting and Linting
 format = [
-    { cmd = "ruff format src/backend tests" },
-    { cmd = "ruff check src/backend tests --fix" },
-    { cmd = "basedpyright --level error src/backend" },
+    { cmd = "ruff format src/backend src/evaluations tests" },
+    { cmd = "ruff check src/backend src/evaluations tests --fix" },
+    { cmd = "basedpyright --level error src/backend src/evaluations" },
 ]
 
 check.ignore_fail = "return_non_zero"
 check.sequence = [
-    { cmd = "ruff check src/backend tests" },
-    { cmd = "basedpyright --level error src/backend" },
+    { cmd = "ruff check src/backend src/evaluations tests" },
+    { cmd = "basedpyright --level error src/backend src/evaluations" },
 ]
 
-lint = { cmd = "ruff check src/backend tests --fix" }
-lint-unsafe = { cmd = "ruff check src/backend tests --fix --unsafe-fixes" }
+lint = { cmd = "ruff check src/backend src/evaluations tests --fix" }
+lint-unsafe = { cmd = "ruff check src/backend src/evaluations tests --fix --unsafe-fixes" }
 
-slop = { cmd = "sloppylint src/backend/ --lenient" }
-slop-strict = { cmd = "sloppylint src/backend/ --strict" }
+slop = { cmd = "sloppylint src/backend/ src/evaluations/ --lenient" }
+slop-strict = { cmd = "sloppylint src/backend/ src/evaluations/ --strict" }
 
 metrics = [
     { cmd = "skylos src/backend --quality" },
-    { cmd = "radon cc src/backend -a -nb" },
-    { cmd = "radon mi src/backend -nb" },
+    { cmd = "radon cc src/backend src/evaluations -a -nb" },
+    { cmd = "radon mi src/backend src/evaluations -nb" },
 ]
 
 quality.ignore_fail = "return_non_zero"
 quality.sequence = [
-    { cmd = "ruff format src/backend tests" },
-    { cmd = "ruff check src/backend tests --fix" },
-    { cmd = "basedpyright --level error src/backend" },
-    { cmd = "radon cc src/backend -a -nb" },
+    { cmd = "ruff format src/backend src/evaluations tests" },
+    { cmd = "ruff check src/backend src/evaluations tests --fix" },
+    { cmd = "basedpyright --level error src/backend src/evaluations" },
+    { cmd = "radon cc src/backend src/evaluations -a -nb" },
     { cmd = "skylos src/backend --quality --danger" },
 ]
 
@@ -227,8 +231,8 @@ convention = "google"
 [tool.basedpyright]
 pythonVersion = "3.11"
 typeCheckingMode = "standard"
-include = ["src/backend"]
-extraPaths = ["src/backend"]
+include = ["src/backend", "src/evaluations"]
+extraPaths = ["src/backend", "src/evaluations"]
 exclude = [
     "**/__pycache__",
     "**/node_modules",

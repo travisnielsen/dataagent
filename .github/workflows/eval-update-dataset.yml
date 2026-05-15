@@ -2,9 +2,9 @@ name: Eval Update Dataset
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - "src/backend/evaluations/datasets/**"
+      - "src/evaluations/datasets/**"
   workflow_dispatch:
 
 permissions:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   eval-update-dataset:
-    runs-on: [ self-hosted, linux, x64, cadence-private ]
+    runs-on: [self-hosted, linux, x64, cadence-private]
     timeout-minutes: 30
 
     steps:
@@ -39,8 +39,8 @@ jobs:
 
       - name: Provision datasets in Foundry
         env:
-          PYTHONPATH: src/backend
+          PYTHONPATH: src
           AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT }}
         run: |
           uv run python -m evaluations.dataset_provisioner \
-            --datasets-dir src/backend/evaluations/datasets
+            --datasets-dir src/evaluations/datasets

@@ -182,6 +182,16 @@ output "foundry_eval_name" {
   value       = var.foundry_eval_name
 }
 
+output "foundry_agent_id" {
+  description = "Foundry agent identifier (name:version) targeted by trace-based evaluations"
+  value       = var.foundry_agent_id
+}
+
+output "azure_ad_client_id" {
+  description = "Azure AD app registration client id accepted by the API auth middleware"
+  value       = var.frontend_app_client_id
+}
+
 output "foundry_dataset_name" {
   description = "Foundry dataset asset name for recurring evaluation runs"
   value       = var.foundry_dataset_name

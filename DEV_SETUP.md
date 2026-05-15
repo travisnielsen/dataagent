@@ -77,28 +77,46 @@ pnpm run dev
 
 ### Evaluation Runner
 
-See [Foundry Evaluations Quickstart](specs/005-foundry-evaluations/quickstart.md) for full evaluation setup.
+Cadence evaluations live in [`src/evaluations/`](src/evaluations/) (a sibling
+of the backend, so eval changes never trigger an API redeploy). See
+[src/evaluations/README.md](src/evaluations/README.md) for the full design.
 
-**Quick start** (local evaluation):
+Evaluations are **Foundry trace-based**: we replay the gold dataset against
+the deployed API to emit `invoke_agent` OTel spans, then submit a Foundry
+trace eval that scores those spans. There is no local-SDK path.
+
+**Quick start** (against the deployed environment):
 
 ```bash
-# Harvest Foundry traces and merge with gold dataset
-uv run python -m evaluations harvest \
-  --output .foundry/datasets \
-  --gold src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl \
-  --days 7
+set -a && source src/backend/.env && set +a
 
-# Run evaluation on mixed dataset
+# 1. Replay the gold dataset through the deployed API to generate traces
+PYTHONPATH=src \
+CADENCE_API_BASE_URL="https://<api-fqdn>" \
+AZURE_AD_CLIENT_ID="<api-app-registration-client-id>" \
+uv run python -m evaluations replay \
+  --dataset src/evaluations/datasets/cadence-eval-gold-v1.jsonl
+
+# 2. Wait ~2-3 minutes for App Insights ingestion, then submit the trace eval
+PYTHONPATH=src \
+AZURE_AI_AGENT_ID="DataAssistant:1" \
 uv run python -m evaluations run \
-  --dataset .foundry/datasets/cadence-eval-mixed-v1.jsonl \
-  --evaluators intent_resolution,task_adherence,relevance,sql_safety \
-  --trigger manual
+  --dataset src/evaluations/datasets/cadence-eval-gold-v1.jsonl \
+  --evaluators intent_resolution,task_adherence,relevance,tool_call_accuracy \
+  --trigger manual \
+  --cloud
 ```
 
 **Requirements**:
-- `.env` configured in `src/backend/` with `AZURE_AI_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME`
-- Azure AI Foundry project with deployed model (e.g., gpt-4o)
-- For SQL safety evaluation: `AZURE_SQL_*` and `AZURE_SEARCH_*` environment variables
+
+- `.env` configured in `src/backend/` with `AZURE_AI_PROJECT_ENDPOINT` and
+  `AZURE_AI_MODEL_DEPLOYMENT_NAME`
+- Deployed Cadence API with Application Insights tracing enabled
+  (`ENABLE_INSTRUMENTATION=true`) and an API app registration whose client id
+  the runner can mint AAD tokens for (UAMI in CI, `az login` locally)
+- Repo vars managed by Terraform: `NEXT_PUBLIC_API_URL`, `AZURE_AD_CLIENT_ID`,
+  `AZURE_AI_AGENT_ID`. Run `infra/scripts/update-github-vars-from-terraform.sh
+  --apply` to refresh them.
 
 ## VS Code Setup
 

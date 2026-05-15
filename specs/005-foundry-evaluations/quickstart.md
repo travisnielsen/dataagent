@@ -3,6 +3,20 @@
 **Feature**: 005-foundry-evaluations
 **Date**: 2026-03-24
 
+> ⚠️ **Superseded.** This quickstart describes the original dataset-mode
+> evaluation design that used the `azure-ai-evaluation` SDK with
+> `expected_behavior` rubrics. The current implementation has pivoted to
+> **Foundry trace-based evaluations** driven by a replay step against the
+> deployed API, with the evaluations package relocated to
+> [`src/evaluations/`](../../src/evaluations/) so it no longer triggers API
+> redeploys.
+>
+> **For the current setup and usage, see
+> [src/evaluations/README.md](../../src/evaluations/README.md) and
+> [DEV_SETUP.md](../../DEV_SETUP.md#evaluation-runner).**
+>
+> The remainder of this file is kept as a historical design record.
+
 ## Prerequisites
 
 - Python 3.11+ with `uv` package manager

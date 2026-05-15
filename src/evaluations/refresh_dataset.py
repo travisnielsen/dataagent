@@ -4,7 +4,7 @@ Usage:
     python -m evaluations.refresh_dataset \
         --dataset-name cadence-eval-gold \
         --dataset-version v1 \
-        --dataset-file src/backend/evaluations/datasets/cadence-eval-gold-v1.jsonl
+        --dataset-file src/evaluations/datasets/cadence-eval-gold-v1.jsonl
 """
 
 from __future__ import annotations
