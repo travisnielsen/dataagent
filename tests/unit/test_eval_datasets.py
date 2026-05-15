@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from evaluations.harvest import (
     get_next_version,
     merge_datasets,
