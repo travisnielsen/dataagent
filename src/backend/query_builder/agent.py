@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from agent_framework import Agent
-from agent_framework_azure_ai import AzureAIClient
+from agent_framework.foundry import FoundryChatClient
 from azure.identity.aio import DefaultAzureCredential
 
 
@@ -19,7 +19,7 @@ def load_prompt() -> str:
 
 
 def create_query_builder_agent(
-    client: AzureAIClient,
+    client: FoundryChatClient,
     instructions: str,
 ) -> Agent:
     """Create a query builder Agent.
@@ -60,12 +60,10 @@ def _create_agent() -> Agent:
     default_model = os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME")
     query_builder_model = os.getenv("AZURE_AI_QUERY_BUILDER_MODEL", default_model)
 
-    # V2 AzureAIClient with agent versioning
-    chat_client = AzureAIClient(
+    chat_client = FoundryChatClient(
         project_endpoint=endpoint,
         credential=credential,
-        model_deployment_name=query_builder_model,
-        use_latest_version=True,
+        model=query_builder_model,
     )
 
     # Load instructions

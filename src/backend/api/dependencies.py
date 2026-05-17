@@ -44,14 +44,14 @@ def get_project_client(request: Request) -> Any:  # noqa: ANN401
     """
     Get the AIProjectClient from app state.
 
-    The chat_client (AzureAIClient) stores the project_client internally.
+    The chat_client (FoundryChatClient) stores the project_client internally.
 
     Raises HTTPException 503 if not initialized.
     """
     chat_client = getattr(request.app.state, "chat_client", None)
     if chat_client is None:
         raise HTTPException(status_code=503, detail="Chat client not initialized")
-    # Access the underlying AIProjectClient from AzureAIClient
+    # Access the underlying AIProjectClient from FoundryChatClient
     if hasattr(chat_client, "project_client"):
         return chat_client.project_client
     return chat_client

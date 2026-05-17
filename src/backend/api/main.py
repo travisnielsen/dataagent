@@ -39,9 +39,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 # Reduce agent_framework verbosity (it logs all message content at INFO level)
 logging.getLogger("agent_framework").setLevel(logging.WARNING)
-# Suppress known AzureAIClient warning about runtime tool/structured_output overrides
-# (non-fatal in current architecture; functionality remains intact)
-logging.getLogger("agent_framework.azure").setLevel(logging.ERROR)
 
 # Check if Azure AD authentication is configured
 AUTH_ENABLED = azure_ad_settings.auth_enabled

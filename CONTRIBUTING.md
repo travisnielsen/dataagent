@@ -55,11 +55,25 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) for clear, a
 
 ## Branch Naming
 
+Two naming styles are accepted; either one passes the pre-commit branch policy check.
+
+**Manual branches** (typed with ticket):
+
 ```
 <type>/<ticket>-<short-description>
+docs/<short-description>            # docs-only shortcut, no ticket required
 ```
 
 Examples: `feat/123-template-matching`, `fix/456-null-response`, `docs/readme-update`
+
+**Spec Kit branches** (created by `/speckit.specify` or the bundled scripts):
+
+```
+NNN-<short-description>             # sequential, e.g. 007-foundry-agent-threads
+YYYYMMDD-HHMMSS-<short-description> # timestamp, e.g. 20260319-143022-foundry-agent-threads
+```
+
+Do not rename Spec Kit branches to add a `<type>/` prefix — the spec directory under `specs/` mirrors the branch name and downstream slash commands depend on it.
 
 ## Pull Requests
 

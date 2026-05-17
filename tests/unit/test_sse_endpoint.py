@@ -117,7 +117,7 @@ _ORCH_PATCHES = {
     "DataAssistant": "assistant.DataAssistant",
     "load_prompt": "assistant.load_assistant_prompt",
     "Agent": "agent_framework.Agent",
-    "AzureAIClient": "agent_framework_azure_ai.AzureAIClient",
+    "AzureAIClient": "agent_framework.foundry.FoundryChatClient",
     "DefaultCred": "azure.identity.aio.DefaultAzureCredential",
 }
 

@@ -21,8 +21,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "agent-framework>=1.0.0rc1",
+    "agent-framework>=1.4.0,<2",
     "aioodbc>=0.5.0",
+    "azure-ai-projects>=1.0.0",
     "azure-identity>=1.15.0",
     "azure-search-documents>=11.5.0",
     "fastapi>=0.115.0",
@@ -36,10 +37,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# `azure-ai-projects` is used by the evaluations harness for dataset asset
-# management and trace queries. The `azure-ai-evaluation` SDK is intentionally
-# not pinned: we submit Foundry trace evaluations directly via the OpenAI-
-# compatible REST API in `src/evaluations/runner.py`.
+# The `azure-ai-evaluation` SDK is intentionally not pinned: feature 008 will
+# submit Foundry trace evaluations directly via `azure-ai-projects` >= 2.0.0
+# `client.evals` with `data_source_type=azure_ai_traces`.
 evaluation = ["azure-ai-projects>=1.0.0"]
 observability = ["azure-monitor-opentelemetry>=1.0.0"]
 dev = [
@@ -283,7 +283,16 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 addopts = ["--strict-markers", "--strict-config", "--tb=short"]
-filterwarnings = ["error"]
+filterwarnings = [
+    # agent-framework 1.4.x stable surface emits ExperimentalWarning at import
+    # time for several preview sub-features (MemoryStore, SkillResource, etc.).
+    # Cadence does not use those features directly; match by message so that
+    # pytest does not have to resolve the warning class (which triggers the
+    # warning itself during import). Keep these filters above the catch-all
+    # "error" filter so they take effect first.
+    "ignore:.*experimental and may change.*",
+    "error",
+]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",

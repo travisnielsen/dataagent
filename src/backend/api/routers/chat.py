@@ -10,7 +10,6 @@ DataAssistant + process_query() pattern:
 """
 
 import asyncio
-import inspect
 import json
 import logging
 import uuid
@@ -215,7 +214,7 @@ async def generate_orchestrator_streaming_response(
     trace_id = uuid.uuid4().hex[:8]
 
     from agent_framework import Agent
-    from agent_framework_azure_ai import AzureAIClient
+    from agent_framework.foundry import FoundryChatClient
     from api.session_manager import get_assistant, store_assistant
     from assistant import DataAssistant, load_assistant_prompt
     from azure.identity.aio import DefaultAzureCredential
@@ -270,11 +269,10 @@ async def generate_orchestrator_streaming_response(
                 settings.azure_ai_orchestrator_model or settings.azure_ai_model_deployment_name
             )
 
-            ai_client = AzureAIClient(
+            ai_client = FoundryChatClient(
                 project_endpoint=endpoint,
                 credential=credential,
-                model_deployment_name=orchestrator_model,
-                use_latest_version=True,
+                model=orchestrator_model,
             )
 
             effective_conversation_id = conversation_id
@@ -285,15 +283,10 @@ async def generate_orchestrator_streaming_response(
                         trace_id,
                     )
                     openai_client = ai_client.project_client.get_openai_client()
-                    created_conversation_result = openai_client.conversations.create()
-                    if inspect.isawaitable(created_conversation_result):
-                        created_conversation = await created_conversation_result
-                    else:
-                        created_conversation = created_conversation_result
+                    created_conversation = await openai_client.conversations.create()
                     created_id = getattr(created_conversation, "id", None)
                     if isinstance(created_id, str) and created_id:
                         effective_conversation_id = created_id
-                        ai_client.conversation_id = created_id
                         logger.info(
                             "[%s] Pre-created provider conversation_id=%s for first turn",
                             trace_id,
@@ -312,25 +305,35 @@ async def generate_orchestrator_streaming_response(
                         creation_error,
                     )
             else:
-                ai_client.conversation_id = effective_conversation_id
                 logger.debug(
-                    "[%s] Reusing inbound conversation_id for AzureAIClient: %s",
+                    "[%s] Reusing inbound conversation_id: %s",
                     trace_id,
                     effective_conversation_id,
                 )
 
+            # Resolve orchestrator agent identity for portal trace correlation.
+            # These values populate the gen_ai.agent.id / gen_ai.agent.name
+            # OTel attributes emitted by AgentTelemetryLayer, which the Foundry
+            # portal Traces view (and Application Insights) read to populate
+            # the "Agent" column on each chat-turn span.
+            orchestrator_agent_name = settings.azure_ai_orchestrator_agent_name
+            orchestrator_agent_id = (
+                settings.azure_ai_orchestrator_agent_id or orchestrator_agent_name
+            )
+
             agent = Agent(
-                name="DataAssistant",
-                instructions=load_assistant_prompt(),
                 client=ai_client,
+                id=orchestrator_agent_id,
+                name=orchestrator_agent_name,
+                instructions=load_assistant_prompt(),
             )
 
             assistant = DataAssistant(agent, effective_conversation_id)
             logger.debug(
-                "[%s] Created new DataAssistant for conversation_id=%s (client_default_conversation_id=%s)",
+                "[%s] Created new DataAssistant for conversation_id=%s (agent_id=%s)",
                 trace_id,
                 effective_conversation_id,
-                ai_client.conversation_id,
+                orchestrator_agent_id,
             )
 
         # Step 1: Classify intent

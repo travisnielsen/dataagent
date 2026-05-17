@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from agent_framework import Agent
-from agent_framework_azure_ai import AzureAIClient
+from agent_framework.foundry import FoundryChatClient
 from azure.identity.aio import DefaultAzureCredential
 
 
@@ -19,7 +19,7 @@ def load_prompt() -> str:
 
 
 def create_param_extractor_agent(
-    client: AzureAIClient,
+    client: FoundryChatClient,
     instructions: str,
 ) -> Agent:
     """Create a parameter extractor Agent.
@@ -60,12 +60,10 @@ def _create_agent() -> Agent:
     default_model = os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME")
     extractor_model = os.getenv("AZURE_AI_PARAM_EXTRACTOR_MODEL", default_model)
 
-    # V2 AzureAIClient with agent versioning
-    chat_client = AzureAIClient(
+    chat_client = FoundryChatClient(
         project_endpoint=endpoint,
         credential=credential,
-        model_deployment_name=extractor_model,
-        use_latest_version=True,
+        model=extractor_model,
     )
 
     # Load instructions

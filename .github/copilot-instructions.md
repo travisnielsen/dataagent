@@ -99,7 +99,7 @@ All task tracking uses **Spec Kit `tasks.md` files** in `specs/<feature>/tasks.m
 3. **Pydantic models** for all I/O (no raw dicts)
 4. **`uv run poe check`** must pass before commit
 5. **Conventional Commits**: `type(scope): description`
-6. **Branch naming compliance**: Before any `git switch -c` or `git branch -m`, enforce [CONTRIBUTING.md](../CONTRIBUTING.md) branch policy (`<type>/<ticket>-<short-description>`; docs-only shortcut `docs/<short-description>`). If required ticket is missing, ask the user before proceeding.
+6. **Branch naming compliance**: Before any `git switch -c` or `git branch -m`, enforce [CONTRIBUTING.md](../CONTRIBUTING.md) branch policy. Accepted patterns: `<type>/<ticket>-<short-description>`, `docs/<short-description>`, or Spec Kit native (`NNN-<short-description>` / `YYYYMMDD-HHMMSS-<short-description>`). Do not reprefix Spec Kit branches. If a required ticket is missing on a manual branch, ask the user before proceeding.
 
 
 ## Architecture Overview
@@ -269,5 +269,6 @@ When modifying workflow routing:
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan:
+[specs/007-foundry-framework-upgrade/plan.md](../specs/007-foundry-framework-upgrade/plan.md)
 <!-- SPECKIT END -->
