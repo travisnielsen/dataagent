@@ -38,11 +38,14 @@ class Settings(BaseSettings):
     azure_ai_orchestrator_model: str | None = None
     """Model override for the orchestrator. Falls back to default."""
 
-    azure_ai_orchestrator_agent_name: str = "cadence-data-assistant"
+    azure_ai_orchestrator_agent_name: str = "DataAssistant"
     """Stable name for the orchestrator agent. Emitted as the ``gen_ai.agent.name``
     OpenTelemetry attribute so that Foundry portal Traces and Application
     Insights can correlate spans with the orchestrator. The same value is used
-    as the agent ``id`` unless ``AZURE_AI_ORCHESTRATOR_AGENT_ID`` is set."""
+    as the agent ``id`` unless ``AZURE_AI_ORCHESTRATOR_AGENT_ID`` is set.
+
+    Defaults to ``DataAssistant`` to match the existing Foundry agent record
+    surfaced in the portal's Agents view (prior rc4 code used this name)."""
 
     azure_ai_orchestrator_agent_id: str | None = None
     """Stable identity for the orchestrator agent (``gen_ai.agent.id``). When

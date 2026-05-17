@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_framework import Agent, AgentSession
+from agent_framework.foundry import FoundryAgent
 from models import (
     NL2SQLRequest,
     NL2SQLResponse,
@@ -175,12 +176,12 @@ class DataAssistant:
     5. Render results back to the user
     """
 
-    def __init__(self, agent: Agent, conversation_id: str | None = None) -> None:
+    def __init__(self, agent: Agent | FoundryAgent, conversation_id: str | None = None) -> None:
         """Initialize the DataAssistant.
 
         Args:
-            agent: Pre-configured Agent for LLM calls
-            conversation_id: Optional existing Foundry conversation ID to resume
+            agent: Pre-configured agent for LLM calls (``Agent`` or ``FoundryAgent``).
+            conversation_id: Optional existing Foundry conversation ID to resume.
         """
         self.agent = agent
         self.context = ConversationContext()

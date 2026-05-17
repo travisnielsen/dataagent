@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_framework import Agent
-from agent_framework.foundry import FoundryChatClient
+from agent_framework.foundry import FoundryAgent, FoundryChatClient
 from azure.identity.aio import DefaultAzureCredential
 from config.settings import Settings
 from models import ParameterDefinition, QueryTemplate, TableColumn, TableMetadata
@@ -451,7 +451,7 @@ class PipelineClients:
     """
 
     param_extractor_agent: Agent
-    query_builder_agent: Agent
+    query_builder_agent: Agent | FoundryAgent
     template_search: TemplateSearchService
     table_search: TableSearchService
     sql_executor: SqlExecutor
@@ -495,20 +495,18 @@ def create_pipeline_clients(
     )
 
     # -- LLM clients -------------------------------------------------------
+    # Parameter-extractor still uses a plain Agent over FoundryChatClient
+    # because there is no hosted PromptAgent record for it in the portal.
+    # (See specs/007-foundry-framework-upgrade for the planned promotion to
+    # FoundryAgent once the portal record is provisioned.)
     extractor_model = (
         settings.azure_ai_param_extractor_model or settings.azure_ai_model_deployment_name
     )
-    builder_model = settings.azure_ai_query_builder_model or settings.azure_ai_model_deployment_name
 
     extractor_llm = FoundryChatClient(
         project_endpoint=settings.azure_ai_project_endpoint,
         credential=credential,
         model=extractor_model,
-    )
-    builder_llm = FoundryChatClient(
-        project_endpoint=settings.azure_ai_project_endpoint,
-        credential=credential,
-        model=builder_model,
     )
 
     # NOTE: conversation_id is no longer settable as a client attribute in
@@ -537,8 +535,14 @@ def create_pipeline_clients(
     builder_prompt = load_builder_prompt()
 
     # -- Agents ------------------------------------------------------------
+    # query-builder uses FoundryAgent so its spans carry `agent_reference`
+    # to the portal's hosted "query-builder-agent" PromptAgent record.
     param_agent = create_param_extractor_agent(extractor_llm, extractor_prompt)
-    builder_agent = create_query_builder_agent(builder_llm, builder_prompt)
+    builder_agent = create_query_builder_agent(
+        project_endpoint=settings.azure_ai_project_endpoint,
+        credential=credential,
+        instructions=builder_prompt,
+    )
 
     # -- Protocol adapters -------------------------------------------------
     template_search = TemplateSearchAdapter(

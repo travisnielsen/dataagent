@@ -213,10 +213,10 @@ async def generate_orchestrator_streaming_response(
 
     trace_id = uuid.uuid4().hex[:8]
 
-    from agent_framework import Agent
-    from agent_framework.foundry import FoundryChatClient
+    from agent_framework.foundry import FoundryAgent
     from api.session_manager import get_assistant, store_assistant
     from assistant import DataAssistant, load_assistant_prompt
+    from azure.ai.projects.aio import AIProjectClient
     from azure.identity.aio import DefaultAzureCredential
     from config.settings import get_settings
     from nl2sql_controller.pipeline import (
@@ -265,15 +265,23 @@ async def generate_orchestrator_streaming_response(
             else:
                 credential = DefaultAzureCredential()
 
-            orchestrator_model = (
-                settings.azure_ai_orchestrator_model or settings.azure_ai_model_deployment_name
+            # Resolve orchestrator agent identity for portal trace correlation.
+            # FoundryAgent binds the chat turns to an existing hosted PromptAgent
+            # record (kind="prompt") in the Foundry project, which causes the SDK
+            # to send `agent_reference` on every Responses API call. That field
+            # is what the portal Traces view filters on to populate per-agent
+            # span correlation. The `instructions=` passed here is sent as a
+            # per-request system message, overriding the portal-stored prompt
+            # at runtime so this code remains the source of truth for behaviour.
+            orchestrator_agent_name = settings.azure_ai_orchestrator_agent_name
+            orchestrator_agent_id = (
+                settings.azure_ai_orchestrator_agent_id or orchestrator_agent_name
             )
 
-            ai_client = FoundryChatClient(
-                project_endpoint=endpoint,
-                credential=credential,
-                model=orchestrator_model,
-            )
+            # Build a project client up-front so we can (optionally) pre-create
+            # the provider conversation and share the same client with the
+            # FoundryAgent below.
+            project_client = AIProjectClient(endpoint=endpoint, credential=credential)
 
             effective_conversation_id = conversation_id
             if not effective_conversation_id:
@@ -282,7 +290,7 @@ async def generate_orchestrator_streaming_response(
                         "[%s] No incoming conversation_id; pre-creating provider conversation",
                         trace_id,
                     )
-                    openai_client = ai_client.project_client.get_openai_client()
+                    openai_client = project_client.get_openai_client()
                     created_conversation = await openai_client.conversations.create()
                     created_id = getattr(created_conversation, "id", None)
                     if isinstance(created_id, str) and created_id:
@@ -311,18 +319,10 @@ async def generate_orchestrator_streaming_response(
                     effective_conversation_id,
                 )
 
-            # Resolve orchestrator agent identity for portal trace correlation.
-            # These values populate the gen_ai.agent.id / gen_ai.agent.name
-            # OTel attributes emitted by AgentTelemetryLayer, which the Foundry
-            # portal Traces view (and Application Insights) read to populate
-            # the "Agent" column on each chat-turn span.
-            orchestrator_agent_name = settings.azure_ai_orchestrator_agent_name
-            orchestrator_agent_id = (
-                settings.azure_ai_orchestrator_agent_id or orchestrator_agent_name
-            )
-
-            agent = Agent(
-                client=ai_client,
+            agent = FoundryAgent(
+                project_client=project_client,
+                agent_name=orchestrator_agent_name,
+                # agent_version omitted -> SDK resolves latest portal version
                 id=orchestrator_agent_id,
                 name=orchestrator_agent_name,
                 instructions=load_assistant_prompt(),
@@ -330,10 +330,10 @@ async def generate_orchestrator_streaming_response(
 
             assistant = DataAssistant(agent, effective_conversation_id)
             logger.debug(
-                "[%s] Created new DataAssistant for conversation_id=%s (agent_id=%s)",
+                "[%s] Created new DataAssistant for conversation_id=%s (agent_name=%s)",
                 trace_id,
                 effective_conversation_id,
-                orchestrator_agent_id,
+                orchestrator_agent_name,
             )
 
         # Step 1: Classify intent

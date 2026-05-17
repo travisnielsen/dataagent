@@ -3,14 +3,24 @@ Query Builder Agent - Standalone agent for testing.
 
 The agent generates SQL queries from table metadata when no
 pre-defined template matches the user's question.
+
+Uses ``FoundryAgent`` so chat-turn spans carry an ``agent_reference``
+to the hosted PromptAgent record ("query-builder-agent") in the
+Microsoft Foundry project, enabling per-agent trace correlation in
+the portal Traces view. The ``instructions`` argument flows through
+as a per-request system message, so this file's ``prompt.md`` remains
+the runtime source of truth even when the portal record's stored
+prompt drifts.
 """
 
 import os
 from pathlib import Path
 
-from agent_framework import Agent
-from agent_framework.foundry import FoundryChatClient
+from agent_framework.foundry import FoundryAgent
+from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import DefaultAzureCredential
+
+QUERY_BUILDER_AGENT_NAME = "query-builder-agent"
 
 
 def load_prompt() -> str:
@@ -19,28 +29,33 @@ def load_prompt() -> str:
 
 
 def create_query_builder_agent(
-    client: FoundryChatClient,
+    *,
+    project_endpoint: str,
+    credential: AsyncTokenCredential,
     instructions: str,
-) -> Agent:
-    """Create a query builder Agent.
+) -> FoundryAgent:
+    """Create a query builder ``FoundryAgent`` bound to the portal record.
 
     Args:
-        client: Azure AI client for LLM access.
-        instructions: Agent system prompt text.
+        project_endpoint: Microsoft Foundry project endpoint URL.
+        credential: Async Azure token credential.
+        instructions: Agent system prompt text (sent as per-request override).
 
     Returns:
-        Configured Agent for query building.
+        Configured ``FoundryAgent`` for SQL query building.
     """
-    return Agent(
-        name="query-builder-agent",
+    return FoundryAgent(
+        project_endpoint=project_endpoint,
+        credential=credential,
+        agent_name=QUERY_BUILDER_AGENT_NAME,
+        # agent_version omitted -> SDK resolves latest portal version
+        name=QUERY_BUILDER_AGENT_NAME,
         instructions=instructions,
-        client=client,
     )
 
 
-def _create_agent() -> Agent:
-    """Create the query builder agent."""
-    # Get Azure AI Foundry endpoint from environment
+def _create_agent() -> FoundryAgent:
+    """Create the query builder agent (used for standalone testing)."""
     endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT", "")
     if not endpoint:
         raise ValueError(
@@ -48,32 +63,19 @@ def _create_agent() -> Agent:
             "Set it to your Azure AI Foundry project endpoint."
         )
 
-    # Create chat client with Azure credential
     # Use AZURE_CLIENT_ID for user-assigned managed identity in Container Apps
     client_id = os.getenv("AZURE_CLIENT_ID")
     if client_id:
-        credential = DefaultAzureCredential(managed_identity_client_id=client_id)
+        credential: AsyncTokenCredential = DefaultAzureCredential(
+            managed_identity_client_id=client_id
+        )
     else:
         credential = DefaultAzureCredential()
 
-    # Use the same model as parameter extractor (or a dedicated one if configured)
-    default_model = os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME")
-    query_builder_model = os.getenv("AZURE_AI_QUERY_BUILDER_MODEL", default_model)
-
-    chat_client = FoundryChatClient(
+    return create_query_builder_agent(
         project_endpoint=endpoint,
         credential=credential,
-        model=query_builder_model,
-    )
-
-    # Load instructions
-    instructions = load_prompt()
-
-    # Create agent (no tools needed - this is pure LLM reasoning)
-    return Agent(
-        name="query-builder-agent",
-        instructions=instructions,
-        client=chat_client,
+        instructions=load_prompt(),
     )
 
 

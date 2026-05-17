@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 from agent_framework import Agent, AgentSession
+from agent_framework.foundry import FoundryAgent
 from models import QueryBuilderRequest, SQLDraft, TableMetadata
 from shared.protocols import NoOpReporter, ProgressReporter
 
@@ -192,7 +193,7 @@ def _parse_llm_response(response_text: str) -> dict[str, Any]:
 
 async def build_query(
     request: QueryBuilderRequest,
-    agent: Agent,
+    agent: Agent | FoundryAgent,
     thread: AgentSession,
     reporter: ProgressReporter = NoOpReporter(),
 ) -> SQLDraft:

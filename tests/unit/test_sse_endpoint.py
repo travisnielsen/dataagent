@@ -116,8 +116,8 @@ _ORCH_PATCHES = {
     "store_assistant": "api.session_manager.store_assistant",
     "DataAssistant": "assistant.DataAssistant",
     "load_prompt": "assistant.load_assistant_prompt",
-    "Agent": "agent_framework.Agent",
-    "AzureAIClient": "agent_framework.foundry.FoundryChatClient",
+    "FoundryAgent": "agent_framework.foundry.FoundryAgent",
+    "AIProjectClient": "azure.ai.projects.aio.AIProjectClient",
     "DefaultCred": "azure.identity.aio.DefaultAzureCredential",
 }
 
@@ -590,8 +590,8 @@ class TestSessionCacheIntegration:
     """Verify DataAssistant creation and reuse via session cache."""
 
     @patch(_ORCH_PATCHES["DefaultCred"])
-    @patch(_ORCH_PATCHES["AzureAIClient"])
-    @patch(_ORCH_PATCHES["Agent"])
+    @patch(_ORCH_PATCHES["AIProjectClient"])
+    @patch(_ORCH_PATCHES["FoundryAgent"])
     @patch(_ORCH_PATCHES["load_prompt"], return_value="test prompt")
     @patch(_ORCH_PATCHES["DataAssistant"])
     @patch(_ORCH_PATCHES["process_query"], new_callable=AsyncMock)
@@ -608,8 +608,8 @@ class TestSessionCacheIntegration:
         mock_process_query,
         mock_data_assistant_cls,
         mock_load_prompt,
-        mock_chat_agent_cls,
-        mock_ai_client_cls,
+        mock_foundry_agent_cls,
+        mock_project_client_cls,
         mock_default_cred_cls,
     ) -> None:
         from api.routers.chat import generate_orchestrator_streaming_response
@@ -630,8 +630,8 @@ class TestSessionCacheIntegration:
         )
 
         mock_data_assistant_cls.assert_called_once()
-        mock_chat_agent_cls.assert_called_once()
-        mock_ai_client_cls.assert_called_once()
+        mock_foundry_agent_cls.assert_called_once()
+        mock_project_client_cls.assert_called_once()
 
     @patch(_ORCH_PATCHES["process_query"], new_callable=AsyncMock)
     @patch(_ORCH_PATCHES["create_clients"])
@@ -667,8 +667,8 @@ class TestSessionCacheIntegration:
         assistant.classify_intent.assert_called_once_with("Show orders")
 
     @patch(_ORCH_PATCHES["DefaultCred"])
-    @patch(_ORCH_PATCHES["AzureAIClient"])
-    @patch(_ORCH_PATCHES["Agent"])
+    @patch(_ORCH_PATCHES["AIProjectClient"])
+    @patch(_ORCH_PATCHES["FoundryAgent"])
     @patch(_ORCH_PATCHES["load_prompt"], return_value="test prompt")
     @patch(_ORCH_PATCHES["DataAssistant"])
     @patch(_ORCH_PATCHES["process_query"], new_callable=AsyncMock)
@@ -685,8 +685,8 @@ class TestSessionCacheIntegration:
         mock_process_query,
         mock_data_assistant_cls,
         mock_load_prompt,
-        mock_chat_agent_cls,
-        mock_ai_client_cls,
+        mock_foundry_agent_cls,
+        mock_project_client_cls,
         mock_default_cred_cls,
     ) -> None:
         from api.routers.chat import generate_orchestrator_streaming_response
