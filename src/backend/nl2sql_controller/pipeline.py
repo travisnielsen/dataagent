@@ -36,6 +36,7 @@ from models import (
     SQLDraft,
     TableMetadata,
 )
+from opentelemetry import baggage, context, trace
 from parameter_extractor.extractor import extract_parameters
 from parameter_validator.validator import validate_parameters
 from pydantic import ValidationError
@@ -1613,48 +1614,73 @@ async def process_query(
         ``NL2SQLResponse`` on success/error, or ``ClarificationRequest``
         when user input is needed.
     """
+    conv_id = clients.conversation_id or ""
+    tracer = trace.get_tracer(__name__)
+    # Propagate conversation ID via OTel baggage so deeply-nested manual
+    # spans (parameter_extraction, execute_tool execute_sql) can stamp
+    # gen_ai.conversation.id without threading conv_id through every call.
+    ctx = (
+        baggage.set_baggage("gen_ai.conversation.id", conv_id) if conv_id else context.get_current()
+    )
+    token = context.attach(ctx)
     try:
-        # 1. Handle refinements
-        if request.is_refinement:
-            if request.previous_template_json:
-                return await _handle_template_refinement(request, clients)
-            if request.previous_sql:
-                return await _handle_dynamic_refinement(request, clients)
+        with tracer.start_as_current_span("nl2sql.process_query") as span:
+            if conv_id:
+                span.set_attribute("gen_ai.conversation.id", conv_id)
+            span.set_attribute("gen_ai.system", "cadence.nl2sql")
+            span.set_attribute("nl2sql.is_refinement", bool(request.is_refinement))
+            span.set_attribute("nl2sql.user_query_length", len(request.user_query or ""))
+            try:
+                # 1. Handle refinements
+                if request.is_refinement:
+                    if request.previous_template_json:
+                        return await _handle_template_refinement(request, clients)
+                    if request.previous_sql:
+                        return await _handle_dynamic_refinement(request, clients)
 
-        # 2. Search for matching template
-        clients.reporter.step_start("Understanding intent")
-        search_result = await clients.template_search.search(request.user_query)
-        clients.reporter.step_end("Understanding intent")
+                # 2. Search for matching template
+                clients.reporter.step_start("Understanding intent")
+                search_result = await clients.template_search.search(request.user_query)
+                clients.reporter.step_end("Understanding intent")
 
-        # 3. Route based on search result
-        if search_result.get("has_high_confidence_match") and search_result.get("best_match"):
-            template = QueryTemplate.model_validate(search_result["best_match"])
-            logger.info(
-                "High confidence template match: '%s' (score: %.3f, gap: %.3f)",
-                template.intent,
-                template.score,
-                search_result.get("ambiguity_gap", 0.0),
-            )
-            return await _template_path(request, template, clients)
+                # 3. Route based on search result
+                if search_result.get("has_high_confidence_match") and search_result.get(
+                    "best_match"
+                ):
+                    template = QueryTemplate.model_validate(search_result["best_match"])
+                    logger.info(
+                        "High confidence template match: '%s' (score: %.3f, gap: %.3f)",
+                        template.intent,
+                        template.score,
+                        search_result.get("ambiguity_gap", 0.0),
+                    )
+                    span.set_attribute("nl2sql.path", "template")
+                    return await _template_path(request, template, clients)
 
-        if search_result.get("is_ambiguous"):
-            logger.info(
-                "Ambiguous template match (gap: %.3f < %.3f)",
-                search_result.get("ambiguity_gap", 0),
-                search_result.get("ambiguity_gap_threshold", 0.05),
-            )
-            return _ambiguous_response(search_result)
+                if search_result.get("is_ambiguous"):
+                    logger.info(
+                        "Ambiguous template match (gap: %.3f < %.3f)",
+                        search_result.get("ambiguity_gap", 0),
+                        search_result.get("ambiguity_gap_threshold", 0.05),
+                    )
+                    span.set_attribute("nl2sql.path", "ambiguous")
+                    return _ambiguous_response(search_result)
 
-        # 4. No high-confidence match — dynamic query generation
-        logger.info(
-            "No high confidence match (score: %.3f). Attempting dynamic query generation.",
-            search_result.get("confidence_score", 0),
-        )
-        return await _dynamic_path(request, search_result, clients)
+                # 4. No high-confidence match — dynamic query generation
+                logger.info(
+                    "No high confidence match (score: %.3f). Attempting dynamic query generation.",
+                    search_result.get("confidence_score", 0),
+                )
+                span.set_attribute("nl2sql.path", "dynamic")
+                return await _dynamic_path(request, search_result, clients)
 
-    except (ValueError, RuntimeError, OSError, ValidationError) as exc:
-        logger.exception("NL2SQL pipeline error: %s", type(exc).__name__)
-        return NL2SQLResponse(
-            sql_query="",
-            error="An error occurred processing your query. Please try again.",
-        )
+            except (ValueError, RuntimeError, OSError, ValidationError) as exc:
+                logger.exception("NL2SQL pipeline error: %s", type(exc).__name__)
+                span.record_exception(exc)
+                span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
+                return NL2SQLResponse(
+                    sql_query="",
+                    error="An error occurred processing your query. Please try again.",
+                )
+    finally:
+        context.detach(token)
