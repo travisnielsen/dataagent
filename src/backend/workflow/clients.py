@@ -22,6 +22,7 @@ from agent_framework.foundry import FoundryAgent, FoundryChatClient
 from azure.identity.aio import DefaultAzureCredential
 from config.settings import Settings
 from models import ParameterDefinition, QueryTemplate, TableColumn, TableMetadata
+from opentelemetry import baggage, trace
 from shared.allowed_values_provider import AllowedValuesProvider
 from shared.clients import AzureSearchClient, AzureSqlClient
 from shared.protocols import (
@@ -408,22 +409,43 @@ class SqlExecutorAdapter:
             Result dict with ``success``, ``columns``, ``rows``,
             ``row_count``, and ``error`` keys.
         """
-        try:
-            async with AzureSqlClient(
-                server=self._server,
-                database=self._database,
-                read_only=True,
-            ) as client:
-                return await client.execute_query(query, params)
-        except Exception as exc:
-            logger.exception("SQL execution error")
-            return {
-                "success": False,
-                "error": str(exc),
-                "columns": [],
-                "rows": [],
-                "row_count": 0,
-            }
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("execute_tool execute_sql") as span:
+            conv_id = baggage.get_baggage("gen_ai.conversation.id")
+            if conv_id:
+                span.set_attribute("gen_ai.conversation.id", str(conv_id))
+            span.set_attribute("gen_ai.tool.name", "execute_sql")
+            span.set_attribute("sql.system", "mssql")
+            span.set_attribute("sql.database", self._database)
+            span.set_attribute("sql.param_count", len(params) if params else 0)
+            settings = Settings()  # type: ignore[call-arg]
+            if settings.enable_sensitive_data:
+                span.set_attribute("sql.statement", query[:2000])
+            try:
+                async with AzureSqlClient(
+                    server=self._server,
+                    database=self._database,
+                    read_only=True,
+                ) as client:
+                    result = await client.execute_query(query, params)
+            except Exception as exc:
+                logger.exception("SQL execution error")
+                span.record_exception(exc)
+                span.set_status(trace.StatusCode.ERROR, str(exc)[:200])
+                return {
+                    "success": False,
+                    "error": str(exc),
+                    "columns": [],
+                    "rows": [],
+                    "row_count": 0,
+                }
+
+            span.set_attribute("sql.success", bool(result.get("success")))
+            span.set_attribute("sql.row_count", int(result.get("row_count", 0) or 0))
+            if not result.get("success"):
+                span.set_attribute("sql.error", str(result.get("error", ""))[:500])
+                span.set_status(trace.StatusCode.ERROR, str(result.get("error", ""))[:200])
+            return result
 
 
 # ---------------------------------------------------------------------------

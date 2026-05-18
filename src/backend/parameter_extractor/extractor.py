@@ -22,6 +22,7 @@ from models import (
     QueryTemplate,
     SQLDraft,
 )
+from opentelemetry import baggage, trace
 from shared.allowed_values_provider import AllowedValuesProvider
 from shared.protocols import NoOpReporter, ProgressReporter
 
@@ -458,18 +459,58 @@ async def extract_parameters(
     """
     reporter.step_start("Extracting parameters")
 
-    try:
-        return await _extract_parameters_inner(
-            request,
-            agent,
-            thread,
-            allowed_values_provider=allowed_values_provider,
+    tracer = trace.get_tracer(__name__)
+    template = request.template
+    with tracer.start_as_current_span("parameter_extraction") as span:
+        conv_id = baggage.get_baggage("gen_ai.conversation.id")
+        if conv_id:
+            span.set_attribute("gen_ai.conversation.id", str(conv_id))
+        span.set_attribute("template.id", template.id or "")
+        span.set_attribute("template.intent", template.intent or "")
+        span.set_attribute(
+            "template.required_param_count", sum(1 for p in template.parameters if p.required)
         )
-    except Exception as exc:
-        logger.exception("Parameter extraction error")
-        return SQLDraft(status="error", source="template", error=str(exc))
-    finally:
+        span.set_attribute("template.total_param_count", len(template.parameters))
+        span.set_attribute("extraction.user_query_length", len(request.user_query))
+        span.set_attribute(
+            "extraction.has_previously_extracted",
+            bool(request.previously_extracted),
+        )
+        try:
+            draft = await _extract_parameters_inner(
+                request,
+                agent,
+                thread,
+                allowed_values_provider=allowed_values_provider,
+            )
+        except Exception as exc:
+            logger.exception("Parameter extraction error")
+            span.record_exception(exc)
+            span.set_status(trace.StatusCode.ERROR, str(exc)[:200])
+            reporter.step_end("Extracting parameters")
+            return SQLDraft(status="error", source="template", error=str(exc))
+
+        span.set_attribute("extraction.status", draft.status)
+        span.set_attribute("extraction.source", draft.source or "")
+        span.set_attribute("extraction.param_count", len(draft.extracted_parameters or {}))
+        span.set_attribute("extraction.defaults_used_count", len(draft.defaults_used or []))
+        # LLM was skipped when all required params were resolved deterministically.
+        span.set_attribute(
+            "extraction.llm_invoked",
+            not _all_required_params_satisfied(draft.extracted_parameters or {}, template)
+            or draft.source != "template",
+        )
+        if draft.parameter_confidences:
+            span.set_attribute(
+                "extraction.min_confidence",
+                min(draft.parameter_confidences.values()),
+            )
+            span.set_attribute(
+                "extraction.max_confidence",
+                max(draft.parameter_confidences.values()),
+            )
         reporter.step_end("Extracting parameters")
+        return draft
 
 
 async def _extract_parameters_inner(
