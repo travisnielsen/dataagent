@@ -10,7 +10,6 @@ DataAssistant + process_query() pattern:
 """
 
 import asyncio
-import inspect
 import json
 import logging
 import uuid
@@ -214,10 +213,10 @@ async def generate_orchestrator_streaming_response(
 
     trace_id = uuid.uuid4().hex[:8]
 
-    from agent_framework import Agent
-    from agent_framework_azure_ai import AzureAIClient
+    from agent_framework.foundry import FoundryAgent
     from api.session_manager import get_assistant, store_assistant
     from assistant import DataAssistant, load_assistant_prompt
+    from azure.ai.projects.aio import AIProjectClient
     from azure.identity.aio import DefaultAzureCredential
     from config.settings import get_settings
     from nl2sql_controller.pipeline import (
@@ -266,16 +265,23 @@ async def generate_orchestrator_streaming_response(
             else:
                 credential = DefaultAzureCredential()
 
-            orchestrator_model = (
-                settings.azure_ai_orchestrator_model or settings.azure_ai_model_deployment_name
+            # Resolve orchestrator agent identity for portal trace correlation.
+            # FoundryAgent binds the chat turns to an existing hosted PromptAgent
+            # record (kind="prompt") in the Foundry project, which causes the SDK
+            # to send `agent_reference` on every Responses API call. That field
+            # is what the portal Traces view filters on to populate per-agent
+            # span correlation. The `instructions=` passed here is sent as a
+            # per-request system message, overriding the portal-stored prompt
+            # at runtime so this code remains the source of truth for behaviour.
+            orchestrator_agent_name = settings.azure_ai_orchestrator_agent_name
+            orchestrator_agent_id = (
+                settings.azure_ai_orchestrator_agent_id or orchestrator_agent_name
             )
 
-            ai_client = AzureAIClient(
-                project_endpoint=endpoint,
-                credential=credential,
-                model_deployment_name=orchestrator_model,
-                use_latest_version=True,
-            )
+            # Build a project client up-front so we can (optionally) pre-create
+            # the provider conversation and share the same client with the
+            # FoundryAgent below.
+            project_client = AIProjectClient(endpoint=endpoint, credential=credential)
 
             effective_conversation_id = conversation_id
             if not effective_conversation_id:
@@ -284,16 +290,11 @@ async def generate_orchestrator_streaming_response(
                         "[%s] No incoming conversation_id; pre-creating provider conversation",
                         trace_id,
                     )
-                    openai_client = ai_client.project_client.get_openai_client()
-                    created_conversation_result = openai_client.conversations.create()
-                    if inspect.isawaitable(created_conversation_result):
-                        created_conversation = await created_conversation_result
-                    else:
-                        created_conversation = created_conversation_result
+                    openai_client = project_client.get_openai_client()
+                    created_conversation = await openai_client.conversations.create()
                     created_id = getattr(created_conversation, "id", None)
                     if isinstance(created_id, str) and created_id:
                         effective_conversation_id = created_id
-                        ai_client.conversation_id = created_id
                         logger.info(
                             "[%s] Pre-created provider conversation_id=%s for first turn",
                             trace_id,
@@ -312,25 +313,27 @@ async def generate_orchestrator_streaming_response(
                         creation_error,
                     )
             else:
-                ai_client.conversation_id = effective_conversation_id
                 logger.debug(
-                    "[%s] Reusing inbound conversation_id for AzureAIClient: %s",
+                    "[%s] Reusing inbound conversation_id: %s",
                     trace_id,
                     effective_conversation_id,
                 )
 
-            agent = Agent(
-                name="DataAssistant",
+            agent = FoundryAgent(
+                project_client=project_client,
+                agent_name=orchestrator_agent_name,
+                # agent_version omitted -> SDK resolves latest portal version
+                id=orchestrator_agent_id,
+                name=orchestrator_agent_name,
                 instructions=load_assistant_prompt(),
-                client=ai_client,
             )
 
             assistant = DataAssistant(agent, effective_conversation_id)
             logger.debug(
-                "[%s] Created new DataAssistant for conversation_id=%s (client_default_conversation_id=%s)",
+                "[%s] Created new DataAssistant for conversation_id=%s (agent_name=%s)",
                 trace_id,
                 effective_conversation_id,
-                ai_client.conversation_id,
+                orchestrator_agent_name,
             )
 
         # Step 1: Classify intent

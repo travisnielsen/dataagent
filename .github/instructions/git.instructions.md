@@ -71,7 +71,10 @@ docs/readme-update
 
 When creating or renaming branches for the user, enforce branch policy proactively:
 
-1. Preferred pattern: `<type>/<ticket>-<short-description>`
+1. Preferred pattern for manual branches: `<type>/<ticket>-<short-description>`
 2. Allowed docs-only shortcut: `docs/<short-description>`
-3. If the branch type is not `docs` and no ticket is provided, ask for the ticket before creating/renaming
-4. Do not invent ticket IDs; require user-provided ticket or explicit user approval for an exception
+3. Spec Kit branches use their native naming and must not be reprefixed:
+   - Sequential: `NNN-<short-description>` (e.g. `007-foundry-agent-threads`)
+   - Timestamp: `YYYYMMDD-HHMMSS-<short-description>`
+4. If a manual branch type is not `docs` and no ticket is provided, ask for the ticket before creating/renaming
+5. Do not invent ticket IDs; require user-provided ticket or explicit user approval for an exception

@@ -41,21 +41,31 @@ validate_branch_policy() {
 
     local docs_short_pattern='^docs/[a-z0-9]+(-[a-z0-9]+)*$'
     local typed_ticket_pattern='^[a-z][a-z0-9-]*/[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$'
+    # Spec Kit native naming: sequential (e.g. 007-foundry-agent-threads)
+    # or timestamp (e.g. 20260319-143022-foundry-agent-threads).
+    local speckit_sequential_pattern='^[0-9]{3,}-[a-z0-9]+(-[a-z0-9]+)*$'
+    local speckit_timestamp_pattern='^[0-9]{8}-[0-9]{6}-[a-z0-9]+(-[a-z0-9]+)*$'
 
-    if [[ "$current_branch" =~ $docs_short_pattern || "$current_branch" =~ $typed_ticket_pattern ]]; then
+    if [[ "$current_branch" =~ $docs_short_pattern \
+        || "$current_branch" =~ $typed_ticket_pattern \
+        || "$current_branch" =~ $speckit_sequential_pattern \
+        || "$current_branch" =~ $speckit_timestamp_pattern ]]; then
         return 0
     fi
 
     echo -e "${RED}Error: Branch name '$current_branch' does not match repository policy.${NC}"
     echo ""
     echo "Allowed patterns:"
-    echo "  <type>/<ticket>-<short-description>"
-    echo "  docs/<short-description>"
+    echo "  <type>/<ticket>-<short-description>     (manual branches)"
+    echo "  docs/<short-description>                (docs-only shortcut)"
+    echo "  NNN-<short-description>                 (Spec Kit sequential)"
+    echo "  YYYYMMDD-HHMMSS-<short-description>     (Spec Kit timestamp)"
     echo ""
     echo "Examples:"
     echo "  feat/123-template-matching"
     echo "  fix/456-null-response"
     echo "  docs/readme-update"
+    echo "  007-foundry-agent-threads"
     echo ""
     return 1
 }

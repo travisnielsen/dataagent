@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any
 
 from agent_framework import Agent, AgentSession
+from agent_framework.foundry import FoundryAgent
 from models import (
     ChartSeriesDefinition,
     ClarificationRequest,
@@ -158,7 +159,7 @@ def _format_defaults_for_display(
     return descriptions
 
 
-def _build_agent_session(agent: Agent, conversation_id: str | None) -> AgentSession:
+def _build_agent_session(agent: Agent | FoundryAgent, conversation_id: str | None) -> AgentSession:
     """Create or reuse an agent session for pipeline LLM calls.
 
     When a provider conversation ID is available, this reuses the same

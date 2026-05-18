@@ -1,8 +1,18 @@
 """Shared test fixtures for Cadence."""
 
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
+
+# Suppress agent-framework 1.4.x ExperimentalWarning emitted at import time for
+# preview sub-features (MemoryStore, SkillResource, etc.) that Cadence does not
+# use. Must run before any agent_framework import. Matched by message to avoid
+# importing the warning class (which itself triggers the warning).
+warnings.filterwarnings(
+    "ignore",
+    message=r".*experimental and may change.*",
+)
 
 import pytest
 
