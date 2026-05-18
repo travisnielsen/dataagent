@@ -2,8 +2,21 @@
 
 **Feature**: Foundry Agent Framework Upgrade & Portal Trace Correlation
 **Date**: 2026-05-17 (rescoped)
+**Updated**: 2026-05-17 (post-implementation correction — see callout below)
 
 This feature is a framework upgrade plus one new correlation attribute (`agent_reference`). It is not a refactor of the continuity model. No new persisted entities are introduced. Existing `conversation_id` plumbing is **preserved**, not removed.
+
+> **Post-implementation correction (2026-05-17)** — the tables below were written assuming `FoundryChatClient` could carry `agent_reference` at construction. In agent-framework 1.4.x GA the `agent_reference` body field is emitted **only** by `FoundryAgent` (the hosted-agent connector). The actual shipped code therefore uses **two** kinds of agent construction:
+>
+> | Agent | Class shipped | Portal record |
+> |-------|---------------|---------------|
+> | Orchestrator (`DataAssistant`) | `FoundryAgent(project_client=..., agent_name="DataAssistant", instructions=load_assistant_prompt())` | Exists |
+> | `query-builder-agent` | `FoundryAgent(project_endpoint=..., agent_name="query-builder-agent", instructions=...)` via `create_query_builder_agent(...)` | Exists |
+> | `parameter-extractor-agent` | `Agent(client=FoundryChatClient(...), id=..., name=...)` *(unchanged from T011)* | **Missing** — deferred |
+>
+> Consequence: the type at every call-site that accepts "either kind" is the union `Agent | FoundryAgent` (the two classes are sibling subclasses of `BaseAgent` with no shared public `.run()`-bearing ancestor). The `provision.py` helper described under "New helpers" was **not built** — records are provisioned manually via the Foundry portal today (see [tasks.md Phase 7, T032/T033 follow-ups](tasks.md#phase-7--post-implementation-correction-portal-trace-correlation)). Settings field `AZURE_AI_ORCHESTRATOR_AGENT_NAME` shipped with default `"DataAssistant"` (not `cadence-data-assistant`); `AZURE_AI_ORCHESTRATOR_AGENT_ID` is retained as an optional pin to a specific agent version.
+>
+> The rest of this document is preserved as-is for the historical record; treat the callout above as authoritative where the two diverge.
 
 ## Modified entities
 

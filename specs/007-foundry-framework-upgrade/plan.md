@@ -1,7 +1,18 @@
 # Implementation Plan: Foundry Agent Framework Upgrade & Portal Trace Correlation
 
 **Branch**: `007-foundry-framework-upgrade` | **Date**: 2026-05-17 (rescoped) | **Spec**: [spec.md](spec.md)
+**Updated**: 2026-05-17 (post-implementation correction — see callout below)
 **Input**: Feature specification from `/specs/007-foundry-framework-upgrade/spec.md`
+
+> **Post-implementation correction (2026-05-17)** — sections "Project Structure" and "Tasks slice" below were drafted assuming a `provision.py` helper would create the orchestrator agent record at startup and that `FoundryChatClient(agent_reference=...)` would carry the portal correlation. Neither matched the actual agent-framework 1.4.x GA surface. The shipped implementation:
+>
+> - Uses `FoundryAgent` (the hosted-agent connector) for `DataAssistant` and `query-builder-agent`. The SDK sends `agent_reference` on the Responses API request body automatically when invoked via `FoundryAgent.run(...)`.
+> - Keeps `parameter-extractor-agent` on `Agent(client=FoundryChatClient(...))` because no portal PromptAgent record exists for it yet (deferred — see [tasks.md T032/T033](tasks.md#phase-7--post-implementation-correction-portal-trace-correlation)).
+> - **Does not** create `src/backend/assistant/provision.py`. Hosted PromptAgent records are provisioned out-of-band via the Foundry portal.
+> - **Does not** create the three new unit-test modules listed below; existing tests in [tests/unit/test_sse_endpoint.py](tests/unit/test_sse_endpoint.py) were updated to patch `FoundryAgent` + `AIProjectClient` instead.
+> - Settings field `AZURE_AI_ORCHESTRATOR_AGENT_NAME` shipped with default `"DataAssistant"` (not `cadence-data-assistant`).
+>
+> See [research.md R3/R4/R7 post-implementation correction boxes](research.md), [tasks.md Phase 7](tasks.md#phase-7--post-implementation-correction-portal-trace-correlation), and [data-model.md top callout](data-model.md) for the full picture. The rest of this plan is preserved for the historical record.
 
 ## Summary
 
