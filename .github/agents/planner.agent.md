@@ -10,9 +10,7 @@ tools:
     web,
     todo,
     agent,
-    microsoftdocs/mcp/*,
-    azure-mcp/*,
-    vscode.mermaid-chat-features/renderMermaidDiagram,
+    azure-mcp/*
   ]
 model: Claude Opus 4.6 (copilot)
 agents: [Security]

@@ -11,13 +11,11 @@ tools:
     "agent",
     "todo",
     "web",
-    "microsoftdocs/mcp/*",
     "azure-mcp/*",
     "ms-python.python/getPythonEnvironmentInfo",
     "ms-python.python/getPythonExecutableCommand",
     "ms-python.python/installPythonPackage",
-    "ms-python.python/configurePythonEnvironment",
-    "vscode.mermaid-chat-features/renderMermaidDiagram",
+    "ms-python.python/configurePythonEnvironment"
   ]
 model: "Claude Opus 4.6 (copilot)"
 user-invokable: true
