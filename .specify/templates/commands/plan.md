@@ -1,6 +1,6 @@
 ---
 description: Execute the implementation planning workflow using the plan template to generate design artifacts.
-handoffs: 
+handoffs:
   - label: Create Tasks
     agent: speckit.tasks
     prompt: Break the plan into tasks
@@ -113,21 +113,50 @@ You **MUST** consider the user input before proceeding (if not empty).
    - For each dependency → best practices task
    - For each integration → patterns task
 
-2. **Generate and dispatch research agents**:
+2. **Research methodology** (MANDATORY for each research task):
+
+   For SDK/API/framework questions:
+   - **First**: Check installed packages — run `uv pip show <package>` or inspect source in `.venv/lib/`
+   - **Second**: Use Microsoft Docs MCP (`mcp_azure_mcp_documentation`) to verify SDK signatures, class names, and kwargs against official docs
+   - **Third**: Reference the `microsoft-agent-framework` skill for any MAF-related decisions (agent creation, workflow patterns, tool decorators)
+   - **Fourth**: Reference `terraform-azure` instruction for any IaC changes
+
+   For architecture/pattern questions:
+   - Reference the `cloud-design-patterns` skill for distributed system patterns
+   - Check existing implementations in `src/backend/entities/` for project conventions
+
+   **Verification requirement**: Every research conclusion MUST cite its source:
+   - `[VERIFIED: package source]` — confirmed via installed package inspection
+   - `[VERIFIED: Microsoft Learn]` — confirmed via MCP documentation lookup
+   - `[VERIFIED: existing code]` — confirmed by reading current implementation
+   - `[UNVERIFIED]` — could not verify; must be flagged for human review
+
+3. **Generate and dispatch research agents**:
 
    ```text
    For each unknown in Technical Context:
      Task: "Research {unknown} for {feature context}"
+     Verification: [method from step 2]
    For each technology choice:
      Task: "Find best practices for {tech} in {domain}"
+     Verification: [method from step 2]
    ```
 
-3. **Consolidate findings** in `research.md` using format:
+4. **Consolidate findings** in `research.md` using format:
    - Decision: [what was chosen]
    - Rationale: [why chosen]
+   - Verification: [VERIFIED: source] or [UNVERIFIED]
    - Alternatives considered: [what else evaluated]
 
-**Output**: research.md with all NEEDS CLARIFICATION resolved
+5. **Phase 0 completion gate**:
+
+   Phase 0 is NOT complete until each research decision has been verified against
+   either (a) installed package source, (b) Microsoft Learn documentation via MCP,
+   or (c) actual API response / existing code inspection. Unverified assumptions
+   MUST be marked `[UNVERIFIED]` and flagged to the user before proceeding to Phase 1.
+   If >2 decisions remain `[UNVERIFIED]`, STOP and ask the user for guidance.
+
+**Output**: research.md with all NEEDS CLARIFICATION resolved and verification citations
 
 ### Phase 1: Design & Contracts
 
