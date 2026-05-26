@@ -36,8 +36,8 @@ Python 3.11+, TypeScript/Next.js: Follow standard conventions
 
 <!-- MANUAL ADDITIONS START -->
 - Branch operations must follow `CONTRIBUTING.md` branch naming policy.
-- Use `<type>/<ticket>-<short-description>` for manual non-docs branches.
+- Use `<type>/<short-description>` for manual branches.
+- Manual branches may also use `<type>/<ticket>-<short-description>`.
 - `docs/<short-description>` is allowed for docs-only work.
 - Spec Kit branches use native naming (`NNN-<short-description>` or `YYYYMMDD-HHMMSS-<short-description>`); do not reprefix them.
-- If a non-docs ticket is missing on a manual branch, ask the user before creating or renaming.
 <!-- MANUAL ADDITIONS END -->
