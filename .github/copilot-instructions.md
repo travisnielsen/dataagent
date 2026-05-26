@@ -270,5 +270,5 @@ When modifying workflow routing:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-[specs/007-foundry-framework-upgrade/plan.md](../specs/007-foundry-framework-upgrade/plan.md)
+[specs/008-foundry-native-evaluations/plan.md](../specs/008-foundry-native-evaluations/plan.md)
 <!-- SPECKIT END -->
