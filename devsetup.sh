@@ -157,8 +157,32 @@ setup_frontend() {
         success "Node.js found: $(node --version)"
         if [ -d "src/frontend" ]; then
             info "Installing frontend dependencies..."
-            cd src/frontend && pnpm install && cd ../..
-            success "Frontend dependencies installed"
+            pushd src/frontend > /dev/null
+
+            if command_exists pnpm; then
+                info "Using pnpm to install frontend dependencies"
+                pnpm install
+
+                if ! pnpm exec concurrently --version > /dev/null 2>&1; then
+                    warn "concurrently not found after install, adding as dev dependency"
+                    pnpm add -D concurrently
+                fi
+            elif command_exists npm; then
+                warn "pnpm not found, falling back to npm install"
+                npm install
+
+                if ! npx --no-install concurrently --version > /dev/null 2>&1; then
+                    warn "concurrently not found after install, adding as dev dependency"
+                    npm install --save-dev concurrently
+                fi
+            else
+                error "Neither pnpm nor npm is available"
+                popd > /dev/null
+                exit 1
+            fi
+
+            popd > /dev/null
+            success "Frontend dependencies installed (including concurrently)"
         fi
     else
         warn "Node.js not found - frontend dependencies not installed"

@@ -57,14 +57,15 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) for clear, a
 
 Two naming styles are accepted; either one passes the pre-commit branch policy check.
 
-**Manual branches** (typed with ticket):
+**Manual branches** (ticket optional):
 
 ```
+<type>/<short-description>
 <type>/<ticket>-<short-description>
-docs/<short-description>            # docs-only shortcut, no ticket required
+docs/<short-description>            # docs-only shortcut
 ```
 
-Examples: `feat/123-template-matching`, `fix/456-null-response`, `docs/readme-update`
+Examples: `feat/template-matching`, `fix/456-null-response`, `docs/readme-update`
 
 **Spec Kit branches** (created by `/speckit.specify` or the bundled scripts):
 
